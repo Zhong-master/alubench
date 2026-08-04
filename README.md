@@ -22,6 +22,28 @@ npm install      # 安装依赖
 npm run dev      # 开发服务器 (默认 http://localhost:5173)
 ```
 
+## Docker 部署
+
+项目为纯前端 SPA，`Dockerfile` 采用**多阶段构建**（node:22 构建 → nginx:1.27 静态托管），产物约几十 MB，断网可运行。
+
+```bash
+docker compose build   # 构建镜像 visionai-3d-workbench:latest
+docker compose up -d   # 启动容器，映射宿主机 5173 → 容器 80
+```
+
+启动后访问 **http://localhost:5173**（局域网内用本机 IP 访问；如端口冲突，改 `docker-compose.yml` 左侧端口号）。停止/重建：
+
+```bash
+docker compose down            # 停止并移除容器
+docker compose up -d --build   # 改动后重建并重启
+```
+
+部署要点：
+- **静态托管**：nginx 配置（`nginx.conf`）含 SPA 回退、`/assets/` 永久缓存、`index.html` 不缓存、gzip 压缩（主 JS 2.5 MB → 812 KB）
+- **数据持久化在浏览器端**：工程文件下载/导入与 localStorage 草稿均存于客户端，容器无状态，重建/升级不丢数据
+- **健康检查**：容器内置 `HEALTHCHECK`，`docker compose ps` 显示 `healthy` 即正常
+- 构建产物（`dist/`）与 `node_modules` 已通过 `.dockerignore` 排除，不进构建上下文
+
 ## 常用命令
 
 | 命令 | 说明 |
@@ -43,22 +65,26 @@ npm run dev      # 开发服务器 (默认 http://localhost:5173)
 ## 项目结构
 
 ```
-src/
-├── App.tsx                     # 状态管理 + 撤销栈 + 持久化 + 顶栏
-├── state.ts                    # AppState 类型与工程文件校验
-├── components/
-│   ├── SceneView.tsx           # 3D 场景渲染（消费共享几何内核）
-│   ├── CameraController.tsx    # 视角动画
-│   ├── MiniCube.tsx            # 浮动工具栏
-│   ├── LeftPanel.tsx           # 左侧面板（尺寸/骨架/层/型材）
-│   ├── LayerEditor.tsx         # 右侧面板（层参数）
-│   ├── BottomBarTable.tsx      # 底栏层参数表格
-│   ├── threeTypes.ts           # R3F controls 最小类型
-│   └── items/                  # 物品元数据 + 3D 模型 + 缩略图
-├── geometry/                   # 共享几何内核（型材/板材/物品占位/BOM/校验）
-└── utils/
-    ├── bom.ts                  # BOM 聚合与 CSV/HTML 导出（委托内核）
-    └── exportHtml.ts           # 自包含 HTML 导出（消费内核几何）
+├── Dockerfile                 # 多阶段构建：node 构建 → nginx 托管
+├── docker-compose.yml         # 一键部署（宿主机 5173 → 容器 80）
+├── nginx.conf                 # SPA 回退 / 缓存 / gzip
+├── .dockerignore              # 排除 node_modules 与 dist
+└── src/
+    ├── App.tsx                     # 状态管理 + 撤销栈 + 持久化 + 顶栏
+    ├── state.ts                    # AppState 类型与工程文件校验
+    ├── components/
+    │   ├── SceneView.tsx           # 3D 场景渲染（消费共享几何内核）
+    │   ├── CameraController.tsx    # 视角动画
+    │   ├── MiniCube.tsx            # 浮动工具栏
+    │   ├── LeftPanel.tsx           # 左侧面板（尺寸/骨架/层/型材）
+    │   ├── LayerEditor.tsx         # 右侧面板（层参数）
+    │   ├── BottomBarTable.tsx      # 底栏层参数表格
+    │   ├── threeTypes.ts           # R3F controls 最小类型
+    │   └── items/                  # 物品元数据 + 3D 模型 + 缩略图
+    ├── geometry/                   # 共享几何内核（型材/板材/物品占位/BOM/校验）
+    └── utils/
+        ├── bom.ts                  # BOM 聚合与 CSV/HTML 导出（委托内核）
+        └── exportHtml.ts           # 自包含 HTML 导出（消费内核几何）
 ```
 
 详细架构说明见 [CLAUDE.md](CLAUDE.md)。

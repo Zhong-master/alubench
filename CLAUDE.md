@@ -23,7 +23,12 @@ npm run preview   # 预览构建产出的 dist/
 npm run lint      # ESLint (flat config: eslint.config.js)
 npm run test      # vitest 单元测试（src/**/*.test.ts）
 npm run check     # 质量门 = lint + tsc + vitest + build（提交/改动前必跑）
+
+docker compose build   # 构建部署镜像（node 构建 → nginx 托管）
+docker compose up -d   # 部署到本机 :5173
 ```
+
+**部署**：纯前端 SPA，无后端。`Dockerfile` 多阶段构建（builder: node:22-alpine 跑 `npm run build` → runner: nginx:1.27-alpine 托管 `dist/`）；`nginx.conf` 做 SPA 回退与缓存/gzip；`.dockerignore` 排除 `node_modules`/`dist`。**场景数据（工程文件/localStorage 草稿）都在浏览器端，容器无状态，重建/升级不丢数据。** 新增部署文件改动只涉及 Dockerfile / docker-compose.yml / nginx.conf / .dockerignore 四个文件，不进入 `src/`。
 
 **自动化测试**：vitest 覆盖共享几何内核的核心逻辑（BOM 聚合、标高截断状态机、物品占位、干涉校验），见 `src/geometry/__tests__/`。测试数据用 `helpers.ts` 的 `makeLayer`/`makeFourLayerScene` 构造。`npm run check` 是唯一防线；另有两份手工回归文档：`ROBUSTNESS_TEST_REPORT.md`（60+ 项健壮性用例）和 `WORKBENCH_SCENARIO_TEST.md`（真实设计场景流程）。
 

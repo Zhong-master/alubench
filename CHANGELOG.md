@@ -2,6 +2,13 @@
 
 本项目遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/) 格式。版本号遵循语义化版本。
 
+## [1.5.0] - 2026-08-04
+
+### 新增
+
+- **Docker 部署**：`Dockerfile` 多阶段构建（node:22 构建 → nginx:1.27 静态托管），`docker-compose.yml` 一键启动（宿主机 5173 → 容器 80），`nginx.conf` 含 SPA 回退/`/assets/` 永久缓存/`index.html` 不缓存/gzip（主 JS 2.5 MB → 812 KB），容器内置 `HEALTHCHECK`
+- **`.dockerignore`**：排除 `node_modules`/`dist`，构建上下文仅含源码，镜像精简
+
 ## [1.4.0] - 2026-08-04
 
 ### 新增
