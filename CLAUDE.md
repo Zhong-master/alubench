@@ -11,8 +11,8 @@ VisionAI 3D Workbench — 基于 Semi Design + React Three Fiber 的工业铝型
 - **构建**: Vite 8 + TypeScript 6
 - **前端框架**: React 19
 - **3D 引擎**: @react-three/fiber + @react-three/drei + Three.js
-- **UI 组件库**: @douyinfe/semi-ui + semi-icons
-- **拖拽**: 原生 HTML5 drag（底栏表格行）；`@dnd-kit/*` 是**未使用的死依赖**（package.json 中声明但 src 零引用，勿被误导）
+- **UI 组件库**: @douyinfe/semi-ui + semi-icons（semi-ui 自身依赖 @dnd-kit，为传递依赖；项目代码不使用）
+- **拖拽**: 原生 HTML5 drag（底栏表格行）
 
 ## 常用命令
 
@@ -70,10 +70,11 @@ App (状态管理 + 撤销栈 + 持久化)
 ### 物品系统 (`src/components/items/`)
 
 - `types.ts` — `ItemRegistry` 定义所有物品元数据（名称、尺寸、分类），以及 `ITEM_MAP` / `ITEMS_BY_CATEGORY` / `CATEGORY_NAMES` 等注册表
-- `index.ts` — `ITEM_COMPONENTS` 将 `ItemType` 映射到 React 3D 组件
-- 各 .tsx 文件分别实现不同类别的 3D 模型（Computer / Camera / Lighting / Controller / Electronics）
-- 所有模型以 `<group>` 包裹，中心在原点，单位 1=1米
-- `ItemThumbnail.tsx` — 用 Three.js Canvas 生成缩略图预览
+- `ItemModel.tsx` — **物品 3D 模型统一实现**：渲染 `getItemPrimitives(type)` 的共享几何描述
+- `index.tsx` — `ITEM_COMPONENTS` 将 `ItemType` 映射到绑定类型的 `ItemModel` 组件
+- `ItemThumbnail.tsx` — 用 Canvas 2D 生成缩略图预览
+
+**⚠️ 物品模型外观由 `src/geometry/itemModel.ts` 的 `getItemPrimitives(type)` 单一描述**（基础图元 box/roundedBox/cylinder/sphere/torus/plane/circle + 位置/旋转/材质）。3D 端 `<ItemModel>` 与导出端 `createItemMesh` 遍历同一描述渲染，两端视觉一致。**新增/修改物品外观时只改 `itemModel.ts`，并保持两种渲染端均可消费**（图元参数与 three 构造一致，单位为米）。
 
 ### 共享几何内核 (`src/geometry/`)
 
@@ -98,7 +99,9 @@ src/geometry/
 
 ### 导出系统 (`src/utils/exportHtml.ts`)
 
-`generateExportHtml()` 将场景序列化为自包含 HTML（内嵌 vanilla Three.js r128 CDN）。构建期调用 `buildSceneGeometry` 把几何注入 `DATA`，模板 JS 只遍历渲染，**无几何计算**。物品模型用 `createItemMesh`（各端实现，需与 R3F 物品组件保持外观一致）。
+`generateExportHtml()` 将场景序列化为自包含 HTML。**构建期调用 `buildSceneGeometry` 注入几何到 `DATA`，并注入 `getItemPrimitives` 物品图元**；three r128 与 OrbitControls 通过 `?raw` 内嵌打包（`src/export/vendor/`），断网/内网亦可打开。模板 JS 只遍历渲染，无几何计算。导出端含「标」按钮切换尺寸标注/层 ID 分组（`dimGroup`/`idGroup`）。
+
+**⚠️ 离线内嵌的三份文件**：`three-r128.min.js` + `OrbitControls-r128.js`（vendored）+ `exportHtml.ts` 模板。升级 three 需同时替换 vendor 文件并核对 `createItemMesh` 的图元构造与 `roundedBoxGeo`。物品模型外观统一走 `itemModel.ts`，导出端 `createItemMesh` 遍历同一描述。
 
 ### 通信机制
 

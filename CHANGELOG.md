@@ -2,6 +2,20 @@
 
 本项目遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/) 格式。版本号遵循语义化版本。
 
+## [1.3.0] - 2026-08-04
+
+### 新增
+
+- **导出 HTML 离线内嵌 three**（移除 CDN 依赖）：`src/export/vendor/` 打包 three r128 + OrbitControls，经 `?raw` 内联进导出文件，断网/内网可直接打开
+- **导出视图「标」显示控制**：与编辑器行为对齐，尺寸标注（`dimGroup`）与层 ID 标签（`idGroup`）可分别切换显隐
+- **物品 3D 模型统一双实现**：新增 `src/geometry/itemModel.ts`（`getItemPrimitives(type)` 共享图元描述），R3F 端 `<ItemModel>` 与导出端 `createItemMesh` 遍历同一描述渲染，两端视觉一致；删除旧的 `Computers/Cameras/Lighting/Controllers/Electronics.tsx` 双实现
+
+### 工程化
+
+- 清理 `@dnd-kit/*` 直接依赖（仅保留为 semi-ui 的传递依赖）；`postcss` 升级修复 1 个 high 级安全漏洞（`npm audit` 0 漏洞）
+- ESLint 忽略 `src/export/vendor/**`（第三方压缩代码）
+- 扩充几何单测：复杂连接（上连/下连/加强筋）、顶板立杆截断、无顶板顶部边框、工作台 1800×800×2000 六层 BOM 断言、导出结构验证（离线内嵌/「标」控制/DATA 几何注入）
+
 ## [1.2.0] - 2026-08-04
 
 ### 重构（根治几何漂移）

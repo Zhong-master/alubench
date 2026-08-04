@@ -1,6 +1,10 @@
 import { ITEM_REGISTRY } from '../components/items';
 import type { AppState } from '../state';
 import { buildSceneGeometry } from '../geometry';
+import { getItemPrimitives } from '../geometry/itemModel';
+// 离线内嵌 three r128 构建（?raw 打包进 bundle），导出 HTML 断网/内网亦可打开
+import threeRaw from '../export/vendor/three-r128.min.js?raw';
+import orbitRaw from '../export/vendor/OrbitControls-r128.js?raw';
 
 const ITEM_COLORS: Record<string, string> = {
   'industrial-pc': '#c8d0d8',
@@ -26,6 +30,8 @@ export function generateExportHtml(state: AppState): string {
     size: item.size,
     color: ITEM_COLORS[item.type] || '#888',
     category: item.category,
+    // 物品模型图元（共享几何描述，导出端遍历渲染，与 3D 端视觉一致）
+    primitives: getItemPrimitives(item.type),
   }));
 
   // 几何全部由共享内核计算，导出端只做渲染（根治与 3D 场景的漂移）
@@ -102,6 +108,23 @@ html, body, #canvas { width: 100%; height: 100%; overflow: hidden; background: #
 }
 #cube-btn:hover { background: rgba(255,255,255,0.22); }
 #cube-btn canvas { width: 36px; height: 36px; pointer-events: none; }
+#label-btn {
+  position: fixed; right: 20px; top: 76px;
+  width: 48px; height: 48px; border-radius: 8px;
+  background: rgba(255,255,255,0.12); backdrop-filter: blur(8px);
+  border: 1px solid rgba(255,255,255,0.18);
+  cursor: pointer; z-index: 10; transition: background 0.15s;
+  color: #ccc; font: 600 14px/48px sans-serif; text-align: center;
+}
+#label-btn:hover { background: rgba(255,255,255,0.22); }
+#label-menu {
+  position: fixed; right: 20px; top: 132px;
+  background: rgba(40,40,40,0.92); backdrop-filter: blur(8px);
+  border: 1px solid rgba(255,255,255,0.18); border-radius: 8px;
+  padding: 10px 12px; z-index: 10; display: none;
+  color: #ccc; font: 12px/1.6 sans-serif;
+}
+#label-menu label { display: flex; align-items: center; gap: 6px; cursor: pointer; white-space: nowrap; }
 #info {
   position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%);
   color: rgba(255,255,255,0.4); font: 13px/1.4 sans-serif;
@@ -113,10 +136,15 @@ html, body, #canvas { width: 100%; height: 100%; overflow: hidden; background: #
 <body>
 <div id="canvas"></div>
 <button id="cube-btn"><canvas id="cube-canvas" width="72" height="72"></canvas></button>
+<button id="label-btn">标</button>
+<div id="label-menu">
+  <label><input type="checkbox" id="chk-dims" checked> 尺寸标识</label>
+  <label><input type="checkbox" id="chk-ids" checked> 层ID标识</label>
+</div>
 <div id="info">鼠标拖拽旋转 · 滚轮缩放 · 右键平移</div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script>${threeRaw}</script>
+<script>${orbitRaw}</script>
 <script>
 // ─── 场景数据 ───
 const DATA = ${json};
@@ -209,16 +237,6 @@ function roundedBoxGeo(w, h, d, r) {
   return ex;
 }
 
-function roundedBox(w, h, d, color, radius, opacity) {
-  const geo = roundedBoxGeo(w, h, d, radius || Math.min(w, h, d) * 0.04);
-  const m = new THREE.MeshStandardMaterial({
-    color, roughness: 0.5, metalness: 0.1,
-    transparent: opacity !== undefined && opacity < 1,
-    opacity: opacity !== undefined ? opacity : 1,
-  });
-  return new THREE.Mesh(geo, m);
-}
-
 // ─── 标签精灵 ───
 function makeLabel(text) {
   const canvas = document.createElement('canvas');
@@ -258,138 +276,42 @@ function makeLabel(text) {
   return sprite;
 }
 
-// ─── 物品形状生成 ───
-function mat(color, opts) {
-  return new THREE.MeshStandardMaterial({ color, roughness: 0.5, metalness: 0.1, ...opts });
+// ─── 物品形状生成（遍历共享图元描述，与 3D 端视觉一致） ───
+function buildPrimitiveMesh(p) {
+  const mat = new THREE.MeshStandardMaterial({
+    color: parseInt(p.color.replace('#', ''), 16),
+    roughness: p.roughness !== undefined ? p.roughness : 0.5,
+    metalness: p.metalness !== undefined ? p.metalness : 0.1,
+    transparent: p.transparent,
+    opacity: p.opacity,
+    emissive: p.emissive ? new THREE.Color(p.emissive) : undefined,
+    emissiveIntensity: p.emissiveIntensity,
+    side: p.side === 'double' ? THREE.DoubleSide : p.side === 'back' ? THREE.BackSide : THREE.FrontSide,
+  });
+  switch (p.kind) {
+    case 'box': return new THREE.Mesh(new THREE.BoxGeometry(...p.args), mat);
+    case 'roundedBox': return new THREE.Mesh(roundedBoxGeo(...p.args, p.radius || 0.004), mat);
+    case 'cylinder': return new THREE.Mesh(new THREE.CylinderGeometry(...p.args), mat);
+    case 'sphere': return new THREE.Mesh(new THREE.SphereGeometry(...p.args), mat);
+    case 'torus': return new THREE.Mesh(new THREE.TorusGeometry(...p.args), mat);
+    case 'plane': return new THREE.Mesh(new THREE.PlaneGeometry(...p.args), mat);
+    case 'circle': return new THREE.Mesh(new THREE.CircleGeometry(...p.args), mat);
+    default: return null;
+  }
 }
 
-function createItemMesh(type, w, h, d, color) {
-  const c = parseInt(color.replace('#', ''), 16);
+function createItemMesh(type, s) {
   const g = new THREE.Group();
-  const M = mat;
-
-  switch (type) {
-    case 'ring-light': {
-      const r = Math.max(w, d) * 0.45;
-      const tube = Math.min(w, d, h) * 0.2;
-      const torus = new THREE.Mesh(new THREE.TorusGeometry(r, tube, 14, 28), M(c));
-      torus.rotation.x = Math.PI / 2;
-      g.add(torus);
-      break;
-    }
-    case 'dome-camera': {
-      const rd = Math.min(w, d) * 0.42;
-      const dome = new THREE.Mesh(
-        new THREE.SphereGeometry(rd, 28, 18, 0, Math.PI * 2, 0, Math.PI / 2),
-        M(c, { transparent: true, opacity: 0.45 })
-      );
-      g.add(dome);
-      const base = new THREE.Mesh(
-        new THREE.CylinderGeometry(rd * 1.05, rd * 1.15, h * 0.12, 28),
-        M(0xc0c8d0, { metalness: 0.3 })
-      );
-      base.position.y = -h * 0.35;
-      g.add(base);
-      break;
-    }
-    case 'industrial-camera': {
-      const body = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), M(c));
-      g.add(body);
-      const lensR = d * 0.18;
-      const lens = new THREE.Mesh(
-        new THREE.CylinderGeometry(lensR, lensR * 1.3, d * 0.7, 14),
-        M(0x222222, { metalness: 0.4 })
-      );
-      lens.rotation.x = Math.PI / 2;
-      lens.position.set(0, 0, d * 0.6);
-      g.add(lens);
-      break;
-    }
-    case 'bullet-camera': {
-      const body = new THREE.Mesh(new THREE.BoxGeometry(w, h, d * 0.65), M(c));
-      g.add(body);
-      const lensR = d * 0.1;
-      const lens = new THREE.Mesh(
-        new THREE.CylinderGeometry(lensR, lensR * 1.2, d * 0.25, 14),
-        M(0x222222, { metalness: 0.3 })
-      );
-      lens.rotation.x = Math.PI / 2;
-      lens.position.set(0, 0, d * 0.5);
-      g.add(lens);
-      break;
-    }
-    case 'laptop': {
-      const base = new THREE.Mesh(new THREE.BoxGeometry(w, h * 0.25, d), M(c));
-      base.position.y = -h * 0.2;
-      g.add(base);
-      const screen = new THREE.Mesh(new THREE.BoxGeometry(w * 0.92, h * 0.55, d * 0.04), M(0x222222));
-      screen.position.set(0, h * 0.45, -d * 0.2);
-      g.add(screen);
-      break;
-    }
-    case 'pda': {
-      const body = roundedBox(w, h, d, c, Math.min(w, h, d) * 0.06);
-      g.add(body);
-      const scr = new THREE.Mesh(new THREE.BoxGeometry(w * 0.65, h * 0.08, d * 0.02), M(0x0a1520, { metalness: 0.3 }));
-      scr.position.set(0, 0, d * 0.51);
-      g.add(scr);
-      break;
-    }
-    case 'industrial-pc': {
-      const body = roundedBox(w, h * 0.6, d, c, Math.min(w, h, d) * 0.015);
-      g.add(body);
-      // 散热鳍片
-      for (let i = 0; i < 8; i++) {
-        const fin = new THREE.Mesh(
-          new THREE.BoxGeometry(w * 0.85, h * 0.06, d * 0.75),
-          M(0xb0b8c0, { metalness: 0.5 })
-        );
-        fin.position.set(0, h * 0.4 + i * (h * 0.08), 0);
-        g.add(fin);
-      }
-      break;
-    }
-    case 'printer': {
-      const body = roundedBox(w, h, d, c, Math.min(w, h, d) * 0.02);
-      g.add(body);
-      // 出纸口
-      const slot = new THREE.Mesh(new THREE.BoxGeometry(w * 0.55, h * 0.02, d * 0.02), M(0x333333));
-      slot.position.set(0, h * 0.35, d * 0.51);
-      g.add(slot);
-      break;
-    }
-    case 'power-controller': {
-      const body = roundedBox(w, h * 0.7, d, c, Math.min(w, h, d) * 0.015);
-      g.add(body);
-      for (let i = 0; i < 5; i++) {
-        const fin = new THREE.Mesh(
-          new THREE.BoxGeometry(w * 0.85, h * 0.05, d * 0.8),
-          M(0xb0b8c0, { metalness: 0.5 })
-        );
-        fin.position.set(0, -h * 0.4 + i * (h * 0.12), 0);
-        g.add(fin);
-      }
-      break;
-    }
-    case 'light-controller': {
-      const body = roundedBox(w, h, d, c, Math.min(w, h, d) * 0.015);
-      g.add(body);
-      break;
-    }
-    case 'product-box': {
-      const body = roundedBox(w, h, d, c, Math.min(w, h, d) * 0.01);
-      g.add(body);
-      // 胶带纹路
-      const tape = new THREE.Mesh(new THREE.BoxGeometry(w * 1.01, h * 1.01, d * 0.02), M(0xc09040, { transparent: true, opacity: 0.3 }));
-      tape.position.set(0, 0, d * 0.51);
-      g.add(tape);
-      break;
-    }
-    default: {
-      g.add(new THREE.Mesh(new THREE.BoxGeometry(w, h, d), M(c)));
-    }
-  }
-
+  const info = DATA.items.find(function(i) { return i.type === type; });
+  if (!info || !info.primitives) return g;
+  info.primitives.forEach(function(p) {
+    const m = buildPrimitiveMesh(p);
+    if (!m) return;
+    m.scale.setScalar(s);
+    m.position.set(p.pos ? p.pos[0] : 0, p.pos ? p.pos[1] : 0, p.pos ? p.pos[2] : 0);
+    if (p.rot) m.rotation.set(p.rot[0], p.rot[1], p.rot[2]);
+    g.add(m);
+  });
   return g;
 }
 
@@ -451,6 +373,12 @@ DATA.frameBeams.forEach(function(b) {
   scene.add(beam(b.pos[0], b.pos[1], b.pos[2], b.size[0], b.size[1], b.size[2]));
 });
 
+// ─── 标识分组（尺寸标注 / 层 ID 标签，经「标」按钮切换显隐） ───
+const dimGroup = new THREE.Group();
+const idGroup = new THREE.Group();
+scene.add(dimGroup);
+scene.add(idGroup);
+
 // ─── 层板（共享内核生成） ───
 DATA.layerGeom.forEach(function(lg) {
   const board = lg.board;
@@ -494,37 +422,35 @@ DATA.layerGeom.forEach(function(lg) {
     }
   }
 
-  // 已放置物品 + 标签（占位由共享内核计算）
+  // 已放置物品 + 标签（占位由共享内核计算，模型由共享图元描述渲染）
   lg.placements.forEach(function(p) {
     const info = DATA.items.find(function(i) { return i.type === p.itemType; });
     if (!info) return;
-    const iw = p.worldSize[0];
-    const ih = p.worldSize[2];
-    const id = p.worldSize[1];
-    const itemGroup = createItemMesh(p.itemType, iw, ih, id, info.color);
+    // 物品图元为自然尺寸，整体按放置缩放（含用户缩放）放大
+    const itemGroup = createItemMesh(p.itemType, p.scale);
     itemGroup.position.set(p.x, p.y, p.z);
     itemGroup.rotation.y = p.rotation * Math.PI / 180;
     itemGroup.scale.set(p.flipX ? -1 : 1, 1, p.flipY ? -1 : 1);
     scene.add(itemGroup);
     const label = makeLabel(info.name);
-    label.position.set(p.x, p.y + ih / 2 + 0.04, p.z);
+    label.position.set(p.x, p.y + p.worldSize[2] / 2 + 0.04, p.z);
     scene.add(label);
   });
 
-  // 层 ID 标签（与 3D 场景一致）
+  // 层 ID 标签（与 3D 场景一致，可经「标」按钮切换）
   if (lg.shelfNumber > 0) {
     const idLabel = makeLabel('#' + lg.shelfNumber);
     idLabel.position.set(board.size[0] + 0.08, board.pos[1], board.pos[2]);
-    scene.add(idLabel);
+    idGroup.add(idLabel);
   }
 });
 
-// ─── 尺寸标注 ───
+// ─── 尺寸标注（可经「标」按钮切换） ───
 const g = 0.1;
 const dimLineMat = new THREE.LineBasicMaterial({ color: 0x999999 });
 function makeDimLine(pts) {
   const bg = new THREE.BufferGeometry().setFromPoints(pts.map(p => new THREE.Vector3(p[0], p[1], p[2])));
-  scene.add(new THREE.Line(bg, dimLineMat));
+  dimGroup.add(new THREE.Line(bg, dimLineMat));
 }
 // 长 标注（沿 Z 方向外扩）
 makeDimLine([[0, 0, D], [0, 0, D + g]]);
@@ -534,7 +460,7 @@ makeDimLine([[0, 0, D + g], [W, 0, D + g]]);
 const lenLabel = makeLabel(DATA.dimensions.width + 'mm');
 lenLabel.position.set(W / 2, -0.02, D + g + 0.08);
 lenLabel.scale.set(0.28, 0.07, 1);
-scene.add(lenLabel);
+dimGroup.add(lenLabel);
 
 // 宽 标注（沿 X 负方向外扩）
 makeDimLine([[0, 0, 0], [-g, 0, 0]]);
@@ -543,7 +469,7 @@ makeDimLine([[-g, 0, 0], [-g, 0, D]]);
 const depLabel = makeLabel(DATA.dimensions.depth + 'mm');
 depLabel.position.set(-g - 0.08, -0.02, D / 2);
 depLabel.scale.set(0.28, 0.07, 1);
-scene.add(depLabel);
+dimGroup.add(depLabel);
 
 // 高 标注（沿 X 负方向）
 makeDimLine([[0, 0, 0], [-g, 0, 0]]);
@@ -552,7 +478,7 @@ makeDimLine([[-g, 0, 0], [-g, H, 0]]);
 const heiLabel = makeLabel(DATA.dimensions.height + 'mm');
 heiLabel.position.set(-g - 0.08, H / 2, 0);
 heiLabel.scale.set(0.28, 0.07, 1);
-scene.add(heiLabel);
+dimGroup.add(heiLabel);
 
 // ─── 小轴 ───
 scene.add(new THREE.AxesHelper(0.15));
@@ -588,6 +514,14 @@ document.getElementById('cube-btn').addEventListener('click', () => {
   controls.target.set(cx, cy, cz);
   controls.update();
 });
+
+// ─── 「标」显示控制（尺寸 / 层ID，与编辑器行为对齐） ───
+document.getElementById('label-btn').addEventListener('click', () => {
+  const menu = document.getElementById('label-menu');
+  menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
+});
+document.getElementById('chk-dims').addEventListener('change', (e) => { dimGroup.visible = e.target.checked; });
+document.getElementById('chk-ids').addEventListener('change', (e) => { idGroup.visible = e.target.checked; });
 
 // ─── 窗口自适应 ───
 window.addEventListener('resize', () => {
