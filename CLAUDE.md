@@ -124,6 +124,9 @@ src/geometry/
 - 物品 `size` 轴顺序：`[长(X), 宽(Z), 高(Y)]`，单位米（见 `types.ts` 顶部注释）
 - **`sortedLayers`（标高降序）是贯穿全应用的规范顺序**：`App.tsx` 中 `useMemo` 生成，层参数、底栏表格、3D 场景、导出全部基于它，不要直接传原始 `layers`
 - `main.tsx` 使用 `React.StrictMode`（开发期组件双重挂载），配合模块级可变状态（`_cappedElev`/`_lastHeight`/`_showDims`/`_showIds`）实现跨渲染持久化——这些是**有意的模式**，新增跨组件可见性状态时沿用
+- **`main.tsx` 顶部必须保持 `import '@douyinfe/semi-ui/react19-adapter'` 在任何 Semi 组件之前**——React 19 下 Semi 的命令式 API（`Modal.confirm`/`Toast`/`Notification`）依赖它注入 createRoot，移除会导致这些 API 静默失效
+- **改层布局（列×行）会经 `handleLayoutChange` 调 `remapPlacedItems` 重映射物品**（越界移除/界内保留）；新增「复制层」走 `duplicateLayer`（深拷贝+标高+10）。两者为 `src/geometry/operations.ts` 纯函数，可单测
+- 撤销/重做支持 Ctrl/Cmd+Z、Ctrl/Cmd+Shift+Z、Ctrl+Y（输入框聚焦时自动跳过）
 - 新物品需在 `types.ts` 的 `ITEM_REGISTRY` 注册、在 `index.ts` 的 `ITEM_COMPONENTS` 映射组件、在 `exportHtml.ts` 的 `createItemMesh` 中添加几何体生成逻辑（三处缺一不可）
 - 层拖拽排序只允许 `countertop` 和 `shelf` 类型，通过交换标高值实现
 - 顶板拆除或添加时自动调整台面标高

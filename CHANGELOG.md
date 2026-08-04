@@ -2,6 +2,25 @@
 
 本项目遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/) 格式。版本号遵循语义化版本。
 
+## [1.4.0] - 2026-08-04
+
+### 新增
+
+- **网格重排物品重映射**：修改层布局（列×行）时，越界物品自动移除、界内保留（`src/geometry/operations.ts` 的 `remapPlacedItems` 纯函数）
+- **复制层**：层结构行内新增「复制」按钮（仅台面/隔板），深拷贝层（含物品/布局/加强筋），标高 +10mm 错开原层（`duplicateLayer`）
+- **撤销/重做快捷键**：Ctrl/Cmd+Z、Ctrl/Cmd+Shift+Z、Ctrl+Y；输入框/文本域聚焦时不触发
+- **导出前校验拦截**：存在错误级校验问题时，导出前弹确认（仍要导出/取消）
+- **首屏空状态引导**：无层时 3D 视图叠加引导面板（添加层→调尺寸→放物品→BOM/导出）
+
+### 修复
+
+- **Semi 命令式 API 在 React 19 下失效**（真实 bug）：`main.tsx` 顶部注入 `@douyinfe/semi-ui/react19-adapter`，`Modal.confirm` / `Toast` 此前从未真正显示（P0 的草稿恢复 Toast、本版导出拦截弹窗均受影响）
+
+### 测试
+
+- `remapPlacedItems`（越界移除/保留）、`duplicateLayer`（深拷贝/标高+10/引用隔离）9 用例
+- 物品图元完整性：14 类型非空、主体尺寸合法、颜色格式合法
+
 ## [1.3.0] - 2026-08-04
 
 ### 新增

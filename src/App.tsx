@@ -30,6 +30,7 @@ import ItemThumbnail, { preloadThumbnails } from './components/items/ItemThumbna
 import { DEFAULT_STATE, isAppState } from './state';
 import type { AppState, ColumnsState } from './state';
 import { applyDimensionChange } from './geometry/dimension';
+import { parseLayout, remapPlacedItems } from './geometry/operations';
 
 // 模块级 — 存储高度截断前各层原始标高，跨渲染持久化
 const _cappedElev = new Map<string, number>();
@@ -146,6 +147,28 @@ const App: React.FC = () => {
     setHistVer((v) => v + 1);
   }, []);
 
+  // 撤销/重做快捷键：Ctrl/Cmd+Z、Ctrl/Cmd+Shift+Z、Ctrl+Y
+  // 输入框聚焦时不触发，避免干扰文字编辑
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      const el = e.target as HTMLElement | null;
+      const tag = el?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el?.isContentEditable) return;
+      if (!(e.ctrlKey || e.metaKey)) return;
+      const key = e.key.toLowerCase();
+      if (key === 'z') {
+        e.preventDefault();
+        if (e.shiftKey) redo();
+        else undo();
+      } else if (key === 'y') {
+        e.preventDefault();
+        redo();
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [undo, redo]);
+
   const handleSave = useCallback(() => {
     const blob = new Blob([JSON.stringify(stateRef.current, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -225,6 +248,38 @@ const App: React.FC = () => {
     [appState.layers]
   );
 
+  // 导出 HTML：先校验，error 级问题时弹确认
+  const doExport = useCallback(() => {
+    const html = generateExportHtml({
+      dimensions: appState.dimensions,
+      profile: appState.profile,
+      columns: appState.columns,
+      layers: sortedLayers,
+    });
+    const blob = new Blob([html], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = '3d-workbench-export.html';
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [appState, sortedLayers]);
+
+  const handleExportClick = useCallback(() => {
+    const errors = issues.filter((i) => i.severity === 'error').length;
+    if (errors === 0) {
+      doExport();
+      return;
+    }
+    Modal.confirm({
+      title: '导出前检查',
+      content: `当前存在 ${errors} 个错误级问题（越界等），导出结果可能不准确。仍要继续导出吗？`,
+      okText: '仍要导出',
+      cancelText: '取消',
+      onOk: () => doExport(),
+    });
+  }, [issues, doExport]);
+
   /** 统一更新 layers（兼容函数式更新），并自动进入撤销栈 */
   const updateLayers = useCallback((updater: Layer[] | ((prev: Layer[]) => Layer[])) => {
     setAppState((prev) => ({
@@ -243,9 +298,15 @@ const App: React.FC = () => {
 
   const handleLayoutChange = useCallback((id: string, layout: string) => {
     updateLayers((prev) =>
-      prev.map((l) =>
-        l.id === id ? { ...l, detail: { ...l.detail, layout } } : l
-      )
+      prev.map((l) => {
+        if (l.id !== id) return l;
+        // 布局变更时重映射物品：越界物品移除，界内保留
+        const newLayout = parseLayout(layout);
+        const placedItems = newLayout
+          ? remapPlacedItems(l, newLayout[0], newLayout[1]).items
+          : []; // 清空布局 → 移除全部物品
+        return { ...l, detail: { ...l.detail, layout, placedItems } };
+      })
     );
   }, [updateLayers]);
 
@@ -473,16 +534,7 @@ const App: React.FC = () => {
                 theme="borderless"
                 size="small"
                 style={{ color: 'var(--semi-color-text-2)', fontSize: 13 }}
-                onClick={() => {
-                  const html = generateExportHtml({ dimensions: appState.dimensions, profile: appState.profile, columns: appState.columns, layers: sortedLayers });
-                  const blob = new Blob([html], { type: 'text/html' });
-                  const url = URL.createObjectURL(blob);
-                  const a = document.createElement('a');
-                  a.href = url;
-                  a.download = '3d-workbench-export.html';
-                  a.click();
-                  URL.revokeObjectURL(url);
-                }}
+                onClick={handleExportClick}
               >
                 导出
               </Button>
@@ -495,6 +547,21 @@ const App: React.FC = () => {
       <div style={{ flex: 1, position: 'relative', backgroundColor: 'var(--semi-color-bg-0)', overflow: 'hidden', minHeight: 0 }}>
         <SceneView dimensions={appState.dimensions} profile={appState.profile} columns={appState.columns} layers={sortedLayers} selectedLayerId={selectedLayerId} selectedItemType={selectedItemType} selectedPlacedItem={selectedPlacedItem} onPlaceItem={handlePlaceItem} onSelectPlacedItem={handleSelectPlacedItem} onTransformPlacedItem={handleTransformPlacedItem} />
         <PresetViewButtons />
+
+        {/* 首屏空状态引导 */}
+        {appState.layers.length === 0 && (
+          <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none', zIndex: 5 }}>
+            <div style={{ background: 'rgba(15,15,18,0.72)', color: '#fff', padding: '28px 36px', borderRadius: 14, textAlign: 'center', maxWidth: 460, backdropFilter: 'blur(4px)' }}>
+              <div style={{ fontSize: 20, fontWeight: 700, marginBottom: 10 }}>开始设计您的铝型材机架</div>
+              <div style={{ fontSize: 13, lineHeight: 2, color: 'rgba(255,255,255,0.72)', textAlign: 'left' }}>
+                1. 在左侧「层结构」添加 <b style={{ color: '#fff' }}>顶板 / 台面 / 隔板 / 底板</b><br />
+                2. 调整整体尺寸与骨架数量<br />
+                3. 选中层设置布局，放置物品<br />
+                4. 用「清单」计算 BOM · 用「导出」分享视图
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* 左侧边栏（浮动覆盖）- 展开时显示面板 */}
         {!leftCollapsed && (

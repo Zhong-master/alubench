@@ -1,7 +1,8 @@
 import { useState, useCallback } from 'react';
-import { Collapse, InputNumber, Input, Button, Select } from '@douyinfe/semi-ui';
-import { IconPlus, IconMinus } from '@douyinfe/semi-icons';
+import { Collapse, InputNumber, Input, Button, Select, Tooltip } from '@douyinfe/semi-ui';
+import { IconPlus, IconMinus, IconCopy } from '@douyinfe/semi-icons';
 import type { ItemType } from './items';
+import { duplicateLayer } from '../geometry/operations';
 
 /** 唯一层 ID 生成器 — 递增计数器，避免 Date.now() 在 <1ms 间隔内碰撞 */
 let _layerIdCounter = 0;
@@ -148,6 +149,17 @@ const LeftPanel: React.FC<LeftPanelProps> = ({ layers, onLayersChange, dimension
       return next;
     });
   }, [onLayersChange, dimensions]);
+
+  // 复制层（仅台面/隔板），插入原层下方（原数组位置之后）
+  const duplicate = useCallback((id: string) => {
+    onLayersChange((prev: Layer[]) => {
+      const src = prev.find((l) => l.id === id);
+      if (!src || src.type === 'top' || src.type === 'bottom') return prev;
+      const copy = duplicateLayer(src);
+      const idx = prev.findIndex((l) => l.id === id);
+      return [...prev.slice(0, idx + 1), copy, ...prev.slice(idx + 1)];
+    });
+  }, [onLayersChange]);
 
   return (
     <div style={{ padding: '12px 8px' }}>
@@ -318,13 +330,26 @@ const LeftPanel: React.FC<LeftPanelProps> = ({ layers, onLayersChange, dimension
                     return <span style={{ fontSize: 10, color: 'var(--semi-color-text-2)' }}>#{idx + 1}</span>;
                   })()}
                 </div>
-                <Button
-                  theme="borderless"
-                  size="small"
-                  icon={<IconMinus size="extra-small" />}
-                  onClick={() => removeLayer(layer.id)}
-                  style={{ color: 'var(--semi-color-danger)', padding: 0, minWidth: 20 }}
-                />
+                <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                  {layer.type !== 'top' && layer.type !== 'bottom' && (
+                    <Tooltip content="复制层">
+                      <Button
+                        theme="borderless"
+                        size="small"
+                        icon={<IconCopy size="extra-small" />}
+                        onClick={() => duplicate(layer.id)}
+                        style={{ color: 'var(--semi-color-text-2)', padding: 0, minWidth: 20 }}
+                      />
+                    </Tooltip>
+                  )}
+                  <Button
+                    theme="borderless"
+                    size="small"
+                    icon={<IconMinus size="extra-small" />}
+                    onClick={() => removeLayer(layer.id)}
+                    style={{ color: 'var(--semi-color-danger)', padding: 0, minWidth: 20 }}
+                  />
+                </div>
               </div>
             ))}
             {layers.length === 0 && (
