@@ -21,10 +21,11 @@ npm run dev       # 启动开发服务器 (默认 :5173)
 npm run build     # TypeScript 检查 + Vite 生产构建
 npm run preview   # 预览构建产出的 dist/
 npm run lint      # ESLint (flat config: eslint.config.js)
-npm run check     # 质量门 = lint + tsc --noEmit + vite build（提交/改动前必跑）
+npm run test      # vitest 单元测试（src/**/*.test.ts）
+npm run check     # 质量门 = lint + tsc + vitest + build（提交/改动前必跑）
 ```
 
-**无自动化测试框架**（无 vitest/jest 等）。`npm run check` 的 `tsc` + `eslint` 是唯一静态防线。测试靠手动 + 根目录两份测试文档：`ROBUSTNESS_TEST_REPORT.md`（60+ 项健壮性用例）和 `WORKBENCH_SCENARIO_TEST.md`（真实设计场景流程）。修改涉及骨架/层/导出/BOM 逻辑时，对照这两份文档手动回归。
+**自动化测试**：vitest 覆盖共享几何内核的核心逻辑（BOM 聚合、标高截断状态机、物品占位、干涉校验），见 `src/geometry/__tests__/`。测试数据用 `helpers.ts` 的 `makeLayer`/`makeFourLayerScene` 构造。`npm run check` 是唯一防线；另有两份手工回归文档：`ROBUSTNESS_TEST_REPORT.md`（60+ 项健壮性用例）和 `WORKBENCH_SCENARIO_TEST.md`（真实设计场景流程）。
 
 **eslint 约定**：`react-hooks/immutability` / `refs` / `set-state-in-effect` 三条规则已显式关闭（见 `eslint.config.js` 注释）——它们与本库的 R3F 命令式场景操作、撤销栈 ref 模式、mount 期草稿恢复冲突，属有意为之。其余规则（类型安全、hook 顺序、未使用变量、依赖完整性）保持严格，新增代码不应出现 `any` 逃逸。
 
@@ -55,7 +56,7 @@ App (状态管理 + 撤销栈 + 持久化)
 
 ### BOM 系统 (`src/utils/bom.ts`)
 
-`computeBom(state)` 从参数层（非 3D 场景）复刻 `SceneView.tsx` 的几何逻辑，计算型材下料清单（规格×长度×数量聚合）与板材清单。`bomToCsv()` 输出 UTF-8 BOM CSV，`bomToHtml()` 输出可打印的自包含 HTML 报告。**几何漂移风险与 `exportHtml.ts` 相同**：改 `SceneView.tsx` 的骨架/层/加强筋逻辑时，必须同步 `bom.ts` 与 `exportHtml.ts` 两处。
+`computeBom(state)` 委托共享内核生成型材实例后聚合（`aggregateBom`），输出型材下料清单（规格×长度×数量）与板材清单。`bomToCsv()` 输出 UTF-8 BOM CSV，`bomToHtml()` 输出可打印的自包含 HTML 报告。几何算法在内核统一，无需再同步多端。
 
 ### 核心数据类型
 
@@ -74,11 +75,30 @@ App (状态管理 + 撤销栈 + 持久化)
 - 所有模型以 `<group>` 包裹，中心在原点，单位 1=1米
 - `ItemThumbnail.tsx` — 用 Three.js Canvas 生成缩略图预览
 
+### 共享几何内核 (`src/geometry/`)
+
+**场景几何算法只有一份实现**——`buildSceneGeometry(state)` 生成全部型材实例（`BeamInstance`，含渲染坐标与 BOM 长度）、板材（`BoardInstance`）与物品占位（`ItemPlacement`，含 0.85 填充系数的基准缩放）。SceneView / exportHtml / bom 三端全部消费内核数据，不再各自实现几何，根治历史 EXPORT-1~5 类漂移回归。
+
+```
+src/geometry/
+├── types.ts        # BeamInstance / BoardInstance / ItemPlacement / FrameContext
+├── context.ts      # getFrameContext（尺寸/规格/立杆截断上下文）、profileMMOf
+├── frame.ts        # buildFrameBeams（角柱/横梁/立柱/顶底梁/无顶板顶框）
+├── layer.ts        # buildLayerGeometry（层板/边框/连接/加强筋）、boardLabel、zOffsetOf
+├── items.ts        # computePlacements（物品占位，尺寸真实性）
+├── aggregate.ts    # aggregateBom / bomTotals（BOM 聚合）
+├── dimension.ts    # applyDimensionChange（标高截断/恢复状态机，纯函数）
+├── validate.ts     # validate（干涉/越界校验）
+└── index.ts        # buildSceneGeometry 统一入口
+```
+
+**⚠️ 修改骨架/层/物品几何时必须改内核**（`SceneView.tsx` 只消费 `BeamInstance`/`BoardInstance` 渲染，`exportHtml.ts` 只消费 `DATA.frameBeams`/`DATA.layerGeom` 渲染，`bom.ts` 只聚合），三端渲染端不再包含几何计算。物品 3D 模型本身保持各端实现（R3F 组件 vs `createItemMesh`）。
+
+**校验**：`validate(state)` 检测层板越界/超高、层间重叠、物品超出网格单元（含 90° 旋转包围盒），顶栏「⚠」按钮展示报告。
+
 ### 导出系统 (`src/utils/exportHtml.ts`)
 
-`generateExportHtml()` 将当前场景序列化为一个自包含的 HTML 文件，内嵌 Three.js CDN、场景重建逻辑和简化物品几何体。CAD 数据通过 `DATA` JSON 注入页面。
-
-**⚠️ 导出 HTML 是纯 vanilla Three.js r128（CDN 脚本加载，无 React/R3F）**。导出端必须用命令式代码完整复刻 `SceneView.tsx` 中的所有几何逻辑（角柱截断、顶/底横梁、层板加强筋、边框型材、尺寸标注、物品几何）。这三处极易漂移——`SceneView.tsx`、`exportHtml.ts`、`bom.ts` 是同一套几何算法的三份实现。历史上 EXPORT-1~5 数据不一致 bug 均源于改 3D 场景时未同步导出端。**改任一处的几何渲染，必须同步另外两处。**
+`generateExportHtml()` 将场景序列化为自包含 HTML（内嵌 vanilla Three.js r128 CDN）。构建期调用 `buildSceneGeometry` 把几何注入 `DATA`，模板 JS 只遍历渲染，**无几何计算**。物品模型用 `createItemMesh`（各端实现，需与 R3F 物品组件保持外观一致）。
 
 ### 通信机制
 

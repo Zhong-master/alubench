@@ -14,6 +14,7 @@ import {
   IconUpload,
   IconPlus,
   IconList,
+  IconAlertTriangle,
 } from '@douyinfe/semi-icons';
 import SceneView from './components/SceneView';
 import PresetViewButtons from './components/MiniCube';
@@ -22,11 +23,13 @@ import BottomBarTable from './components/BottomBarTable';
 import LayerEditor from './components/LayerEditor';
 import { generateExportHtml } from './utils/exportHtml';
 import { computeBom, bomToCsv, bomToHtml } from './utils/bom';
+import { validate } from './geometry';
 import { ITEM_REGISTRY, ITEMS_BY_CATEGORY, CATEGORY_NAMES } from './components/items';
 import type { ItemType } from './components/items';
 import ItemThumbnail, { preloadThumbnails } from './components/items/ItemThumbnail';
 import { DEFAULT_STATE, isAppState } from './state';
 import type { AppState, ColumnsState } from './state';
+import { applyDimensionChange } from './geometry/dimension';
 
 // 模块级 — 存储高度截断前各层原始标高，跨渲染持久化
 const _cappedElev = new Map<string, number>();
@@ -55,6 +58,7 @@ const App: React.FC = () => {
   const [selectedPlacedItem, setSelectedPlacedItem] = useState<{ layerId: string; col: number; row: number } | null>(null);
   const [pendingTransform, setPendingTransform] = useState({ rotation: 0, scale: 1, flipX: false, flipY: false });
   const [bomOpen, setBomOpen] = useState(false);
+  const [validateOpen, setValidateOpen] = useState(false);
   const dragIdRef = useRef<string | null>(null);
   const dragOverRef = useRef<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -193,6 +197,9 @@ const App: React.FC = () => {
 
   // BOM 清单（从参数直接计算）
   const bom = useMemo(() => computeBom(appState), [appState]);
+  // 干涉/越界校验（共享内核数据）
+  const issues = useMemo(() => validate(appState), [appState]);
+  const issueCount = issues.length;
   const handleDownloadCsv = useCallback(() => {
     const blob = new Blob([bomToCsv(bom)], { type: 'text/csv;charset=utf-8' });
     const url = URL.createObjectURL(blob);
@@ -314,29 +321,7 @@ const App: React.FC = () => {
         const oldH = _lastHeight;
         const newH = next.height;
         _lastHeight = newH;
-        const nextLayers = prev.layers.map((l) => {
-          // 顶板标高跟随整体高度变化
-          if (l.type === 'top' && l.detail.elevation === oldH) {
-            if (_cappedElev.has(l.id)) _cappedElev.delete(l.id);
-            return { ...l, detail: { ...l.detail, elevation: newH, length: next.width, width: next.depth } };
-          }
-          if (l.detail.elevation > newH) {
-            if (oldH > newH && !_cappedElev.has(l.id)) {
-              _cappedElev.set(l.id, l.detail.elevation);
-            }
-            return { ...l, detail: { ...l.detail, elevation: newH, length: next.width, width: next.depth } };
-          }
-          if (oldH < newH && _cappedElev.has(l.id)) {
-            const orig = _cappedElev.get(l.id)!;
-            if (l.detail.elevation === oldH) {
-              _cappedElev.delete(l.id);
-              const elev = Math.min(orig, newH);
-              return { ...l, detail: { ...l.detail, elevation: elev, length: next.width, width: next.depth } };
-            }
-          }
-          // 所有层跟随整体尺寸变化
-          return { ...l, detail: { ...l.detail, length: next.width, width: next.depth } };
-        });
+        const nextLayers = applyDimensionChange(prev.layers, oldH, newH, next.width, next.depth, _cappedElev);
         return { ...prev, dimensions: next, layers: nextLayers };
       });
     },
@@ -463,6 +448,21 @@ const App: React.FC = () => {
               <div style={{ width: 1, height: 20, background: 'var(--semi-color-border)', margin: '0 4px' }} />
               <Tooltip content="BOM 切割清单">
                 <Button theme="borderless" size="small" icon={<IconList size="small" />} onClick={() => setBomOpen(true)} />
+              </Tooltip>
+              <Tooltip content={issueCount > 0 ? `校验：发现 ${issueCount} 个问题` : '校验：未发现问题'}>
+                <Button
+                  theme="borderless"
+                  size="small"
+                  onClick={() => setValidateOpen(true)}
+                  style={{ position: 'relative', color: issueCount > 0 ? 'var(--semi-color-danger)' : 'var(--semi-color-text-2)' }}
+                >
+                  <IconAlertTriangle size="small" />
+                  {issueCount > 0 && (
+                    <span style={{ position: 'absolute', top: -2, right: -4, background: '#e33', color: '#fff', borderRadius: 8, fontSize: 10, lineHeight: '14px', minWidth: 14, textAlign: 'center', padding: '0 3px' }}>
+                      {issueCount}
+                    </span>
+                  )}
+                </Button>
               </Tooltip>
             </div>
             <Tooltip content="资源管理器" position="bottom">
@@ -910,6 +910,32 @@ const App: React.FC = () => {
             型材下料合计：{(bom.totalProfileLength / 1000).toFixed(2)} m。连接件（角件/螺栓/T型螺母）按组装图纸另行配置。
           </div>
         </div>
+      </Modal>
+
+      {/* 校验报告弹窗 */}
+      <Modal
+        title={`校验报告${issueCount > 0 ? `（${issueCount} 个问题）` : ''}`}
+        visible={validateOpen}
+        onCancel={() => setValidateOpen(false)}
+        footer={null}
+        width={560}
+      >
+        {issueCount === 0 ? (
+          <div style={{ padding: '24px 8px', textAlign: 'center', color: 'var(--semi-color-text-2)', fontSize: 14 }}>
+            ✅ 未发现问题
+          </div>
+        ) : (
+          <div style={{ maxHeight: '60vh', overflow: 'auto' }}>
+            {issues.map((issue, i) => (
+              <div key={i} style={{ display: 'flex', gap: 8, padding: '8px 6px', borderBottom: '1px solid var(--semi-color-border)', fontSize: 13, alignItems: 'flex-start' }}>
+                <span style={{ flexShrink: 0, fontWeight: 600, color: issue.severity === 'error' ? 'var(--semi-color-danger)' : 'var(--semi-color-warning)' }}>
+                  {issue.severity === 'error' ? '✕' : '⚠'}
+                </span>
+                <span style={{ color: 'var(--semi-color-text-0)' }}>{issue.message}</span>
+              </div>
+            ))}
+          </div>
+        )}
       </Modal>
     </div>
   );

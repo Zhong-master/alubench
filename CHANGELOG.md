@@ -2,6 +2,27 @@
 
 本项目遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/) 格式。版本号遵循语义化版本。
 
+## [1.2.0] - 2026-08-04
+
+### 重构（根治几何漂移）
+
+- **共享几何内核 `src/geometry/`**：型材/板材/物品占位几何算法收敛为单一实现（`buildSceneGeometry`），SceneView、导出 HTML、BOM 三方统一消费 `BeamInstance`/`BoardInstance`/`ItemPlacement`，消除三份几何实现漂移（历史 EXPORT-1~5 类回归的根源）
+  - `context.ts`（尺寸/规格/立杆截断上下文）、`frame.ts`（机架级型材）、`layer.ts`（层板/边框/连接/加强筋）、`items.ts`（物品占位）、`aggregate.ts`（BOM 聚合）
+  - `exportHtml.ts` 改为构建期计算几何注入 `DATA`，模板 JS 只渲染
+  - `bom.ts` 委托内核聚合
+  - `SceneView.tsx` 保留交互（网格/选中/放置），几何渲染消费内核
+- **尺寸真实性**：物品基准缩放去掉 0.35 上限，改为按网格单元 0.85 填充系数（SceneView 与导出 HTML 同步生效）
+- **标高截断/恢复状态机**抽出为纯函数 `applyDimensionChange`（`App.tsx` 调用）
+
+### 新增
+
+- **干涉/越界校验**（`src/geometry/validate.ts`）：层板越界/超高（error）、层间垂直重叠（warning）、物品超出网格单元含 90° 旋转包围盒（warning）；顶栏「⚠」按钮角标计数 + 报告弹窗
+- **vitest 单元测试**：18 个用例覆盖 BOM 聚合、标高状态机、物品占位、干涉校验（`src/geometry/__tests__/`）；`npm run test`，纳入 `npm run check` 质量门
+
+### 工程化
+
+- `package.json`：新增 `test` script，`check` 加入 vitest
+
 ## [1.1.0] - 2026-08-04
 
 ### 新增

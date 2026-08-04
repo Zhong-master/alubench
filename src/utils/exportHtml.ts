@@ -1,12 +1,6 @@
-import type { Layer } from '../components/LeftPanel';
 import { ITEM_REGISTRY } from '../components/items';
-
-interface ExportState {
-  dimensions: { width: number; depth: number; height: number };
-  profile: string[];
-  columns: { front: number; back: number; left: number; right: number; top: number; bottom: number; bottomFrame: string };
-  layers: Layer[];
-}
+import type { AppState } from '../state';
+import { buildSceneGeometry } from '../geometry';
 
 const ITEM_COLORS: Record<string, string> = {
   'industrial-pc': '#c8d0d8',
@@ -25,7 +19,7 @@ const ITEM_COLORS: Record<string, string> = {
   'product-box': '#a07030',
 };
 
-export function generateExportHtml(state: ExportState): string {
+export function generateExportHtml(state: AppState): string {
   const itemData = ITEM_REGISTRY.map((item) => ({
     type: item.type,
     name: item.name,
@@ -33,6 +27,14 @@ export function generateExportHtml(state: ExportState): string {
     color: ITEM_COLORS[item.type] || '#888',
     category: item.category,
   }));
+
+  // 几何全部由共享内核计算，导出端只做渲染（根治与 3D 场景的漂移）
+  const geo = buildSceneGeometry(state);
+  const shelfNumberFor = (layerId: string) => {
+    const shelves = state.layers.filter((l) => l.type === 'shelf');
+    const idx = shelves.findIndex((l) => l.id === layerId);
+    return idx >= 0 ? idx + 1 : 0;
+  };
 
   const data = {
     dimensions: state.dimensions,
@@ -66,6 +68,17 @@ export function generateExportHtml(state: ExportState): string {
       },
     })),
     items: itemData,
+    // ── 共享内核几何数据 ──
+    frameBeams: geo.frameBeams,
+    layerGeom: geo.layers.map((lg) => ({
+      layerId: lg.layerId,
+      board: lg.board,
+      beams: lg.beams,
+      placements: lg.placements,
+      gridCols: lg.gridCols,
+      gridRows: lg.gridRows,
+      shelfNumber: shelfNumberFor(lg.layerId),
+    })),
   };
 
   const json = JSON.stringify(data);
@@ -430,319 +443,82 @@ function beam(x, y, z, lx, ly, lz) {
   return m;
 }
 
-// ─── 框架 ───
 const profileMM = parseInt((DATA.profile[1] || '4040').substring(0, 2)) || 40;
-const t = profileMM / 1000;
-PROFILE_SHAPE = makeProfileShape(t, DATA.profile);
+PROFILE_SHAPE = makeProfileShape(profileMM / 1000, DATA.profile);
 
-// 查找顶板及其立杆连接设置
-const topLayerData = DATA.layers.find(l => l.type === 'top');
-const cols = topLayerData ? topLayerData.detail.topColumns : { fl: true, fr: true, bl: true, br: true };
+// ─── 框架（共享内核生成） ───
+DATA.frameBeams.forEach(function(b) {
+  scene.add(beam(b.pos[0], b.pos[1], b.pos[2], b.size[0], b.size[1], b.size[2]));
+});
 
-// 顶板以下第一个延伸至立柱的层，用于截断未勾选的立杆
-const topElev = topLayerData ? topLayerData.detail.elevation / 1000 : H;
-const fullWidthLayers = DATA.layers
-  .filter(l => l.type !== 'top' && (l.detail.elevation / 1000) < topElev - 0.001 && l.detail.frontConnect === 'extend')
-  .sort((a, b) => b.detail.elevation - a.detail.elevation);
-const capY = fullWidthLayers.length > 0
-  ? fullWidthLayers[0].detail.elevation / 1000 - fullWidthLayers[0].detail.thickness / 2000
-  : H;
+// ─── 层板（共享内核生成） ───
+DATA.layerGeom.forEach(function(lg) {
+  const board = lg.board;
+  const col = parseInt(board.color.replace('#', ''), 16);
 
-// 各面额外立柱截止层（空字符串=全高），从 DATA.columns.*Cap 读取层 ID
-function getFaceCap(side) {
-  var key = side + 'Cap';
-  var capId = DATA.columns[key];
-  if (!capId) return H;
-  var capLayer = DATA.layers.find(function(l) { return l.id === capId; });
-  if (!capLayer) return H;
-  return capLayer.detail.elevation / 1000;
-}
+  // 层板本体
+  const m = box(board.size[0], board.size[1], board.size[2], isNaN(col) ? 0x888888 : col);
+  m.position.set(board.pos[0], board.pos[1], board.pos[2]);
+  scene.add(m);
 
-// 四角立柱（支持立杆连接截断）
-function addCornerPillar(x, cyPos, z, fullH) {
-  var colH = fullH ? H : capY;
-  var colCy = colH / 2;
-  scene.add(beam(x, colCy, z, t, colH, t));
-}
-addCornerPillar(0, cy, D, cols.fl !== false);
-addCornerPillar(W, cy, D, cols.fr !== false);
-addCornerPillar(0, cy, 0, cols.bl !== false);
-addCornerPillar(W, cy, 0, cols.br !== false);
-
-// 底部横梁
-const bf = DATA.columns.bottomFrame || 'full';
-if (bf === 'full' || bf === 'frontback') {
-  scene.add(beam(cx, t / 2, D, W - t, t, t));
-  scene.add(beam(cx, t / 2, 0, W - t, t, t));
-}
-if (bf === 'full' || bf === 'leftright') {
-  scene.add(beam(0, t / 2, cz, t, t, D - t));
-  scene.add(beam(W, t / 2, cz, t, t, D - t));
-}
-
-// 额外立柱（四面）
-function addExtraCols(count, len, xFixed, zFixed, side) {
-  const arr = Array.from({ length: count }, (_, i) => (len / (count + 1)) * (i + 1));
-  const capped = (xFixed === null && (zFixed === D && (cols.fl === false || cols.fr === false))) ||
-                 (xFixed === null && (zFixed === 0 && (cols.bl === false || cols.br === false))) ||
-                 (zFixed === null && (xFixed === 0 && (cols.fl === false || cols.bl === false))) ||
-                 (zFixed === null && (xFixed === W && (cols.fr === false || cols.br === false)));
-  const cornerCap = capped ? capY : H;
-  const faceCap = getFaceCap(side);
-  const pillarCap = Math.min(cornerCap, faceCap);
-  const h = Math.max(pillarCap - t, 0.01);
-  const y = t + h / 2;
-  arr.forEach(p => {
-    const x = xFixed !== null ? xFixed : p;
-    const z = zFixed !== null ? zFixed : p;
-    scene.add(beam(x, y, z, t, h, t));
+  // 该层边框/连接/加强筋型材
+  lg.beams.forEach(function(b) {
+    scene.add(beam(b.pos[0], b.pos[1], b.pos[2], b.size[0], b.size[1], b.size[2]));
   });
-}
-addExtraCols(DATA.columns.front, W, null, D, 'front');
-addExtraCols(DATA.columns.back, W, null, 0, 'back');
-addExtraCols(DATA.columns.left, D, 0, null, 'left');
-addExtraCols(DATA.columns.right, D, W, null, 'right');
 
-// 顶面/底面横向加强筋（沿 Z 方向）
-function spaced(count, len) {
-  return Array.from({ length: count }, (_, i) => (len / (count + 1)) * (i + 1));
-}
-spaced(DATA.columns.top, W).forEach(x => {
-  scene.add(beam(x, H - t / 2, cz, t, t, D - t));
+  // 布局网格
+  if (lg.gridCols > 0) {
+    const cw = board.size[0] / lg.gridCols;
+    const ch = board.size[2] / lg.gridRows;
+    const zOff = board.pos[2] - board.size[2] / 2;
+    const topY = board.pos[1] + board.size[1] / 2 + 0.0005;
+    const gridMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.08, side: THREE.DoubleSide, depthWrite: false });
+    const borderMat = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.12, depthTest: true });
+    for (let c = 0; c < lg.gridCols; c++) {
+      for (let r = 0; r < lg.gridRows; r++) {
+        const cx2 = c * cw + cw / 2;
+        const cz2 = zOff + r * ch + ch / 2;
+        const gm = new THREE.Mesh(new THREE.PlaneGeometry(cw * 0.94, ch * 0.94), gridMat);
+        gm.rotation.x = -Math.PI / 2;
+        gm.position.set(cx2, topY, cz2);
+        scene.add(gm);
+        const pts = [
+          new THREE.Vector3(cx2 - cw / 2, topY, cz2 - ch / 2),
+          new THREE.Vector3(cx2 + cw / 2, topY, cz2 - ch / 2),
+          new THREE.Vector3(cx2 + cw / 2, topY, cz2 + ch / 2),
+          new THREE.Vector3(cx2 - cw / 2, topY, cz2 + ch / 2),
+          new THREE.Vector3(cx2 - cw / 2, topY, cz2 - ch / 2),
+        ];
+        scene.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), borderMat));
+      }
+    }
+  }
+
+  // 已放置物品 + 标签（占位由共享内核计算）
+  lg.placements.forEach(function(p) {
+    const info = DATA.items.find(function(i) { return i.type === p.itemType; });
+    if (!info) return;
+    const iw = p.worldSize[0];
+    const ih = p.worldSize[2];
+    const id = p.worldSize[1];
+    const itemGroup = createItemMesh(p.itemType, iw, ih, id, info.color);
+    itemGroup.position.set(p.x, p.y, p.z);
+    itemGroup.rotation.y = p.rotation * Math.PI / 180;
+    itemGroup.scale.set(p.flipX ? -1 : 1, 1, p.flipY ? -1 : 1);
+    scene.add(itemGroup);
+    const label = makeLabel(info.name);
+    label.position.set(p.x, p.y + ih / 2 + 0.04, p.z);
+    scene.add(label);
+  });
+
+  // 层 ID 标签（与 3D 场景一致）
+  if (lg.shelfNumber > 0) {
+    const idLabel = makeLabel('#' + lg.shelfNumber);
+    idLabel.position.set(board.size[0] + 0.08, board.pos[1], board.pos[2]);
+    scene.add(idLabel);
+  }
 });
-spaced(DATA.columns.bottom, W).forEach(x => {
-  scene.add(beam(x, t / 2, cz, t, t, D - t));
-});
 
-// 无顶板时生成顶部边框横梁
-const hasTop = DATA.layers.some(l => l.type === 'top');
-if (!hasTop) {
-  const tf = cols.fl !== false ? t / 2 : -t / 2;
-  const tF = cols.fr !== false ? W - t / 2 : W + t / 2;
-  const tb = cols.bl !== false ? t / 2 : -t / 2;
-  const tB = cols.br !== false ? W - t / 2 : W + t / 2;
-  scene.add(beam((tf + tF) / 2, H - t / 2, D, tF - tf, t, t));
-  scene.add(beam((tb + tB) / 2, H - t / 2, 0, tB - tb, t, t));
-  scene.add(beam(0, H - t / 2, cz, t, t, D - t));
-  scene.add(beam(W, H - t / 2, cz, t, t, D - t));
-}
-
-	// ─── 层板 ───
-	DATA.layers.forEach(layer => {
-	  const lx = layer.detail.length / 1000;
-	  const lz = layer.detail.width / 1000;
-	  const ly = layer.detail.elevation / 1000;
-	  const lt = layer.detail.thickness / 1000;
-	  const col = parseInt(layer.color.replace('#', ''), 16);
-	  const halign = layer.detail.halign || 'left';
-	  const zOff = halign === 'left' ? 0 : halign === 'right' ? D - lz : (D - lz) / 2;
-
-	  // 层板本体
-	  const board = box(lx, lt, lz, isNaN(col) ? 0x888888 : col);
-	  board.position.set(lx / 2, ly, zOff + lz / 2);
-	  scene.add(board);
-
-	  // 边框型材
-	  if (layer.type === 'countertop' || layer.type === 'shelf' || layer.type === 'top') {
-	    const fc = layer.detail.frontConnect || 'extend';
-	    const isFull = lz >= D - 0.001;
-	    const connect = isFull ? 'extend' : (fc === 'up' || fc === 'down' || fc === 'drop' || fc === 'none') ? 'none' : 'extend';
-	    const lrZ = connect === 'extend' ? cz : zOff + (t + lz) / 2;
-	    const lrLen = connect === 'extend' ? D - t : lz;
-	    const pt = (() => {
-	      const raw = layer.detail.profileType || DATA.profile[1] || '';
-	      const parts = raw.split('-');
-	      const numStr = parts[parts.length - 1]?.substring(0, 2) || '';
-	      return (parseInt(numStr) || profileMM) / 1000;
-	    })();
-	    scene.add(beam(lx / 2, ly - lt / 2 - pt / 2, zOff + lz, lx - pt, pt, pt));
-	    scene.add(beam(lx / 2, ly - lt / 2 - pt / 2, zOff, lx - pt, pt, pt));
-	    scene.add(beam(0, ly - lt / 2 - pt / 2, lrZ, pt, pt, lrLen));
-	    scene.add(beam(lx, ly - lt / 2 - pt / 2, lrZ, pt, pt, lrLen));
-	  }
-
-	  // 上连型材（原 drop）
-	  if ((layer.type === 'countertop' || layer.type === 'shelf' || layer.type === 'top') && (layer.detail.frontConnect === 'up' || layer.detail.frontConnect === 'drop')) {
-	    const above = DATA.layers.filter(l => {
-	      const le = l.detail.elevation / 1000;
-	      return le > ly + 0.001 && (l.type === 'countertop' || l.type === 'shelf' || l.type === 'top');
-	    }).sort((a, b) => a.detail.elevation - b.detail.elevation)[0];
-	    if (above) {
-	      const aly = above.detail.elevation / 1000;
-	      const alt = above.detail.thickness / 1000;
-	      const abovePT = (() => {
-	        const raw = above.detail.profileType || DATA.profile[1] || '';
-	        const parts = raw.split('-');
-	        const numStr = parts[parts.length - 1]?.substring(0, 2) || '';
-	        return (parseInt(numStr) || profileMM) / 1000;
-	      })();
-	      const aboveLz = above.detail.width / 1000;
-	      const aboveExtends = aboveLz >= D - 0.001 || above.detail.frontConnect === 'extend';
-	      const dropTop = above.type === 'top' ? aly - alt / 2 : aly - alt / 2 - abovePT;
-	      const dropBot = ly - lt / 2;
-	      const dropH = Math.max(dropTop - dropBot, 0.001);
-	      const pt = (() => {
-	        const raw = layer.detail.profileType || DATA.profile[1] || '';
-	        const parts = raw.split('-');
-	        const numStr = parts[parts.length - 1]?.substring(0, 2) || '';
-	        return (parseInt(numStr) || profileMM) / 1000;
-	      })();
-	      const frontZ = aboveExtends ? D : zOff + lz;
-	      const backZ = aboveExtends ? 0 : zOff;
-	      if (aboveExtends && zOff + lz < D - 0.001) {
-	        scene.add(beam(0, dropBot + pt / 2, (zOff + lz + D) / 2, pt, pt, D - (zOff + lz)));
-	        scene.add(beam(lx, dropBot + pt / 2, (zOff + lz + D) / 2, pt, pt, D - (zOff + lz)));
-	      }
-	      if (aboveExtends && zOff > 0.001) {
-	        scene.add(beam(0, dropBot + pt / 2, zOff / 2, pt, pt, zOff));
-	        scene.add(beam(lx, dropBot + pt / 2, zOff / 2, pt, pt, zOff));
-	      }
-	      scene.add(beam(0, dropBot + dropH / 2, frontZ, pt, dropH, pt));
-	      scene.add(beam(lx, dropBot + dropH / 2, frontZ, pt, dropH, pt));
-	      if (aboveExtends) {
-	        scene.add(beam(0, dropBot + dropH / 2, backZ, pt, dropH, pt));
-	        scene.add(beam(lx, dropBot + dropH / 2, backZ, pt, dropH, pt));
-	      }
-	    }
-	  }
-
-	  // 下连型材
-	  if ((layer.type === 'countertop' || layer.type === 'shelf' || layer.type === 'top') && layer.detail.frontConnect === 'down') {
-	    const below = DATA.layers.slice().reverse().filter(l => {
-	      const le = l.detail.elevation / 1000;
-	      return le < ly - 0.001 && (l.type === 'countertop' || l.type === 'shelf' || l.type === 'bottom');
-	    }).sort((a, b) => b.detail.elevation - a.detail.elevation)[0];
-	    if (below) {
-	      const bly = below.detail.elevation / 1000;
-	      const blt = below.detail.thickness / 1000;
-	      const belowPT = (() => {
-	        const raw = below.detail.profileType || DATA.profile[1] || '';
-	        const parts = raw.split('-');
-	        const numStr = parts[parts.length - 1]?.substring(0, 2) || '';
-	        return (parseInt(numStr) || profileMM) / 1000;
-	      })();
-	      const belowLz = below.detail.width / 1000;
-	      const belowExtends = belowLz >= D - 0.001 || below.detail.frontConnect === 'extend';
-	      const dropBot = below.type === 'bottom' ? bly + blt / 2 : bly + blt / 2 + belowPT;
-	      const dropTop = ly - lt / 2;
-	      const dropH = Math.max(dropTop - dropBot, 0.001);
-	      const pt = (() => {
-	        const raw = layer.detail.profileType || DATA.profile[1] || '';
-	        const parts = raw.split('-');
-	        const numStr = parts[parts.length - 1]?.substring(0, 2) || '';
-	        return (parseInt(numStr) || profileMM) / 1000;
-	      })();
-	      const frontZ = belowExtends ? D : zOff + lz;
-	      const backZ = belowExtends ? 0 : zOff;
-	      if (belowExtends && zOff + lz < D - 0.001) {
-	        scene.add(beam(0, dropBot + dropH / 2 - pt / 2, (zOff + lz + D) / 2, pt, pt, D - (zOff + lz)));
-	        scene.add(beam(lx, dropBot + dropH / 2 - pt / 2, (zOff + lz + D) / 2, pt, pt, D - (zOff + lz)));
-	      }
-	      if (belowExtends && zOff > 0.001) {
-	        scene.add(beam(0, dropBot + dropH / 2 - pt / 2, zOff / 2, pt, pt, zOff));
-	        scene.add(beam(lx, dropBot + dropH / 2 - pt / 2, zOff / 2, pt, pt, zOff));
-	      }
-	      scene.add(beam(0, dropBot + dropH / 2, frontZ, pt, dropH, pt));
-	      scene.add(beam(lx, dropBot + dropH / 2, frontZ, pt, dropH, pt));
-	      if (belowExtends) {
-	        scene.add(beam(0, dropBot + dropH / 2, backZ, pt, dropH, pt));
-	        scene.add(beam(lx, dropBot + dropH / 2, backZ, pt, dropH, pt));
-	      }
-	    }
-	  }
-
-	  // 加强筋
-	  if (layer.type === 'countertop' || layer.type === 'shelf' || layer.type === 'top') {
-	    const ribN = layer.detail.ribCount || 0;
-	    const ribDir = layer.detail.ribDirection || 'x';
-	    if (ribN > 0) {
-	      const ribPT = (() => {
-	        const raw = layer.detail.profileType || DATA.profile[1] || '';
-	        const parts = raw.split('-');
-	        const numStr = parts[parts.length - 1]?.substring(0, 2) || '';
-	        return (parseInt(numStr) || profileMM) / 1000;
-	      })();
-	      for (let ri = 0; ri < ribN; ri++) {
-	        if (ribDir === 'x') {
-	          const zPos = zOff + (lz / (ribN + 1)) * (ri + 1);
-	          scene.add(beam(lx / 2, ly - lt / 2 - ribPT / 2, zPos, lx - ribPT, ribPT, ribPT));
-	        } else {
-	          const xPos = (lx / (ribN + 1)) * (ri + 1);
-	          scene.add(beam(xPos, ly - lt / 2 - ribPT / 2, zOff + lz / 2, ribPT, ribPT, lz - ribPT));
-	        }
-	      }
-	    }
-	  }
-
-	  // 布局网格
-	  if (layer.detail.layout) {
-	    const [cols, rows] = layer.detail.layout.split('X').map(Number);
-	    if (cols && rows) {
-	      const cw = lx / cols;
-	      const ch = lz / rows;
-	      const topY = ly + lt / 2 + 0.0005;
-	      const gridMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.08, side: THREE.DoubleSide, depthWrite: false });
-	      const borderMat = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.12, depthTest: true });
-	      for (let c = 0; c < cols; c++) {
-	        for (let r = 0; r < rows; r++) {
-	          const cx2 = c * cw + cw / 2;
-	          const cz2 = zOff + r * ch + ch / 2;
-	          const g = new THREE.PlaneGeometry(cw * 0.94, ch * 0.94);
-	          const m = new THREE.Mesh(g, gridMat);
-	          m.rotation.x = -Math.PI / 2;
-	          m.position.set(cx2, topY, cz2);
-	          scene.add(m);
-	          // 网格边框
-	          const pts = [
-	            new THREE.Vector3(cx2 - cw / 2, topY, cz2 - ch / 2),
-	            new THREE.Vector3(cx2 + cw / 2, topY, cz2 - ch / 2),
-	            new THREE.Vector3(cx2 + cw / 2, topY, cz2 + ch / 2),
-	            new THREE.Vector3(cx2 - cw / 2, topY, cz2 + ch / 2),
-	            new THREE.Vector3(cx2 - cw / 2, topY, cz2 - ch / 2),
-	          ];
-	          const bg = new THREE.BufferGeometry().setFromPoints(pts);
-	          scene.add(new THREE.Line(bg, borderMat));
-	        }
-	      }
-	    }
-	  }
-
-	  // 已放置物品
-	  if (layer.detail.layout && layer.detail.placedItems.length > 0) {
-	    const [cols, rows] = layer.detail.layout.split('X').map(Number);
-	    if (cols && rows) {
-	      const cw = lx / cols;
-	      const ch = lz / rows;
-	      const topY = ly + lt / 2;
-
-	      layer.detail.placedItems.forEach(pi => {
-	        const info = DATA.items.find(i => i.type === pi.itemType);
-	        if (!info) return;
-	        const cellX = pi.col * cw + cw / 2;
-	        const cellZ = zOff + pi.row * ch + ch / 2;
-	        const baseS = Math.min((cw * 0.65) / info.size[0], (ch * 0.65) / info.size[1], 0.35);
-	        const userS = pi.scale || 1;
-	        const finalS = baseS * userS;
-	        const iw = info.size[0] * finalS;
-	        const ih = info.size[2] * finalS;
-	        const id = info.size[1] * finalS;
-	        const iy = topY + ih / 2 + 0.001;
-
-	        const itemGroup = createItemMesh(pi.itemType, iw, ih, id, info.color);
-	        const rot = (pi.rotation || 0) * Math.PI / 180;
-	        itemGroup.position.set(cellX, iy, cellZ);
-	        itemGroup.rotation.y = rot;
-	        itemGroup.scale.set(pi.flipX ? -1 : 1, 1, pi.flipY ? -1 : 1);
-	        scene.add(itemGroup);
-
-	        // 标签
-	        const label = makeLabel(info.name);
-	        label.position.set(cellX, iy + ih / 2 + 0.04, cellZ);
-	        scene.add(label);
-	      });
-	    }
-	  }
-	});
 // ─── 尺寸标注 ───
 const g = 0.1;
 const dimLineMat = new THREE.LineBasicMaterial({ color: 0x999999 });
