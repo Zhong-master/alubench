@@ -4,6 +4,8 @@ import type { Layer, LayerDetail, LayerType } from './LeftPanel';
 
 interface LayerEditorProps {
   layer: Layer | null;
+  /** 隔板序号（仅 shelf 类型有意义，用于标题显示 #N） */
+  shelfNumber?: number;
   dimensions: { width: number; depth: number; height: number };
   onDetailChange: (id: string, field: string, value: number) => void;
   onLayoutChange: (id: string, layout: string) => void;
@@ -70,7 +72,7 @@ const Num: React.FC<NumProps> = ({ value, min, max, disabled, onChange }) => (
   />
 );
 
-const LayerEditor: React.FC<LayerEditorProps> = ({ layer, dimensions, onDetailChange, onLayoutChange, onLockToggle, onLayerPropChange, onSwitchToItems }) => {
+const LayerEditor: React.FC<LayerEditorProps> = ({ layer, shelfNumber, dimensions, onDetailChange, onLayoutChange, onLockToggle, onLayerPropChange, onSwitchToItems }) => {
   const layoutRowRef = useRef<HTMLDivElement>(null);
 
   if (!layer) {
@@ -88,7 +90,7 @@ const LayerEditor: React.FC<LayerEditorProps> = ({ layer, dimensions, onDetailCh
       {/* 标题栏 */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 2px' }}>
         <span style={{ fontWeight: 700, fontSize: 15, color: layer.color }}>
-          {LAYER_LABELS[layer.type]}{layer.type === 'shelf' ? ` #${'1'}` : ''}
+          {LAYER_LABELS[layer.type]}{layer.type === 'shelf' && shelfNumber ? ` #${shelfNumber}` : ''}
         </span>
         <Button
           theme="borderless" size="small"

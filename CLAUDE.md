@@ -12,7 +12,7 @@ VisionAI 3D Workbench — 基于 Semi Design + React Three Fiber 的工业铝型
 - **前端框架**: React 19
 - **3D 引擎**: @react-three/fiber + @react-three/drei + Three.js
 - **UI 组件库**: @douyinfe/semi-ui + semi-icons
-- **拖拽**: @dnd-kit
+- **拖拽**: 原生 HTML5 drag（底栏表格行）；`@dnd-kit/*` 是**未使用的死依赖**（package.json 中声明但 src 零引用，勿被误导）
 
 ## 常用命令
 
@@ -20,18 +20,22 @@ VisionAI 3D Workbench — 基于 Semi Design + React Three Fiber 的工业铝型
 npm run dev       # 启动开发服务器 (默认 :5173)
 npm run build     # TypeScript 检查 + Vite 生产构建
 npm run preview   # 预览构建产出的 dist/
+npm run lint      # ESLint (flat config: eslint.config.js)
+npm run check     # 质量门 = lint + tsc --noEmit + vite build（提交/改动前必跑）
 ```
 
-**无自动化测试框架**（无 vitest/jest 等，`npm run build` 的 `tsc` 是唯一静态检查）。测试靠手动 + 根目录两份测试文档：`ROBUSTNESS_TEST_REPORT.md`（60+ 项健壮性用例）和 `WORKBENCH_SCENARIO_TEST.md`（真实设计场景流程）。修改涉及骨架/层/导出逻辑时，对照这两份文档手动回归。
+**无自动化测试框架**（无 vitest/jest 等）。`npm run check` 的 `tsc` + `eslint` 是唯一静态防线。测试靠手动 + 根目录两份测试文档：`ROBUSTNESS_TEST_REPORT.md`（60+ 项健壮性用例）和 `WORKBENCH_SCENARIO_TEST.md`（真实设计场景流程）。修改涉及骨架/层/导出/BOM 逻辑时，对照这两份文档手动回归。
+
+**eslint 约定**：`react-hooks/immutability` / `refs` / `set-state-in-effect` 三条规则已显式关闭（见 `eslint.config.js` 注释）——它们与本库的 R3F 命令式场景操作、撤销栈 ref 模式、mount 期草稿恢复冲突，属有意为之。其余规则（类型安全、hook 顺序、未使用变量、依赖完整性）保持严格，新增代码不应出现 `any` 逃逸。
 
 ## 代码架构
 
 ### 数据流（集中在 App.tsx）
 
-所有状态集中在 `App.tsx` 中，通过 props 向下传递给子组件。层次结构：
+所有场景数据集中在 `App.tsx` 中，通过 props 向下传递给子组件。层次结构：
 
 ```
-App (状态管理)
+App (状态管理 + 撤销栈 + 持久化)
 ├── SceneView.tsx          ← 3D 场景渲染（React Three Fiber Canvas）
 │   ├── CameraController.tsx   ← 视角动画
 │   ├── MiniCube.tsx           ← 浮动工具栏（视角、背景、标识开关）
@@ -40,6 +44,18 @@ App (状态管理)
 ├── LayerEditor.tsx        ← 右侧面板（选中层的详细参数）
 └── BottomBarTable.tsx     ← 底栏（层参数表格，支持拖拽排序）
 ```
+
+### 场景状态、撤销与持久化 (`src/state.ts` + App.tsx)
+
+- **`AppState`**（`src/state.ts`）：`{ dimensions, profile, columns, layers }` 的可序列化结构，是**工程文件 / localStorage 草稿 / 撤销栈三者共享的唯一数据形状**。`isAppState()` 用于防御性反序列化校验。
+- **撤销/重做**：`App.tsx` 用 `historyRef`/`futureRef` 两个栈（各 60 步）+ `useEffect` 监听 `appState` 引用变化自动记录历史；`skipRecordRef` 标记跳过撤销/重做/加载/新建时的自我记录。`stateRef` 始终指向最新值供事件处理器读取。
+- **持久化**：`localStorage` key `visionai-workbench-draft-v1`，500ms 防抖自动保存草稿，启动时恢复；顶栏按钮可下载/加载 `.json` 工程文件、新建（清草稿）。
+
+**⚠️ 修改场景数据的入口都必须经过 `setAppState`**（或 `updateLayers` 包装），否则不会进入撤销栈。注意 `_lastHeight`/`_cappedElev`（模块级，`App.tsx` 顶部）在整体尺寸变更时处理标高截断/恢复，跨渲染持久。
+
+### BOM 系统 (`src/utils/bom.ts`)
+
+`computeBom(state)` 从参数层（非 3D 场景）复刻 `SceneView.tsx` 的几何逻辑，计算型材下料清单（规格×长度×数量聚合）与板材清单。`bomToCsv()` 输出 UTF-8 BOM CSV，`bomToHtml()` 输出可打印的自包含 HTML 报告。**几何漂移风险与 `exportHtml.ts` 相同**：改 `SceneView.tsx` 的骨架/层/加强筋逻辑时，必须同步 `bom.ts` 与 `exportHtml.ts` 两处。
 
 ### 核心数据类型
 
@@ -62,7 +78,7 @@ App (状态管理)
 
 `generateExportHtml()` 将当前场景序列化为一个自包含的 HTML 文件，内嵌 Three.js CDN、场景重建逻辑和简化物品几何体。CAD 数据通过 `DATA` JSON 注入页面。
 
-**⚠️ 导出 HTML 是纯 vanilla Three.js r128（CDN 脚本加载，无 React/R3F）**。导出端必须用命令式代码完整复刻 `SceneView.tsx` 中的所有几何逻辑（角柱截断、顶/底横梁、层板加强筋、边框型材、尺寸标注、物品几何）。这两处极易漂移——历史上 EXPORT-1~5 数据不一致 bug 均源于改 3D 场景时未同步导出端。**改任一处的几何渲染，必须同步另一处。**
+**⚠️ 导出 HTML 是纯 vanilla Three.js r128（CDN 脚本加载，无 React/R3F）**。导出端必须用命令式代码完整复刻 `SceneView.tsx` 中的所有几何逻辑（角柱截断、顶/底横梁、层板加强筋、边框型材、尺寸标注、物品几何）。这三处极易漂移——`SceneView.tsx`、`exportHtml.ts`、`bom.ts` 是同一套几何算法的三份实现。历史上 EXPORT-1~5 数据不一致 bug 均源于改 3D 场景时未同步导出端。**改任一处的几何渲染，必须同步另外两处。**
 
 ### 通信机制
 

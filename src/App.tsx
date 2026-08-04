@@ -621,6 +621,12 @@ const App: React.FC = () => {
                 {rightTab === 'properties' ? (
                   <LayerEditor
                     layer={appState.layers.find((l) => l.id === selectedLayerId) || null}
+                    shelfNumber={(() => {
+                      // 与底栏/3D 标签一致：按标高降序编号
+                      const shelves = sortedLayers.filter((l) => l.type === 'shelf');
+                      const idx = shelves.findIndex((l) => l.id === selectedLayerId);
+                      return idx >= 0 ? idx + 1 : undefined;
+                    })()}
                     dimensions={appState.dimensions}
                     onDetailChange={handleDetailChange}
                     onLayoutChange={handleLayoutChange}
