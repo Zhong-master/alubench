@@ -1,25 +1,24 @@
 import { useRef } from 'react';
-import { InputNumber, Button, Select } from '@douyinfe/semi-ui';
-import type { Layer, LayerDetail, LayerType } from './LeftPanel';
+import { Button, Select, Tooltip } from '@douyinfe/semi-ui';
+import DeferredNumberInput from './DeferredNumberInput';
+import { PROFILE_SIZES } from './layerTypes';
+import { useT } from '../i18n';
+import { LAYER_TYPE_KEY } from '../i18n/labels';
+import type { Layer, LayerDetail } from './LeftPanel';
 
 interface LayerEditorProps {
   layer: Layer | null;
   /** 隔板序号（仅 shelf 类型有意义，用于标题显示 #N） */
   shelfNumber?: number;
   dimensions: { width: number; depth: number; height: number };
+  /** 机架主型材 [标准, 规格]，用于渲染「跟随机架（GB-4040）」与各规格选项 */
+  profile: string[];
   onDetailChange: (id: string, field: string, value: number) => void;
   onLayoutChange: (id: string, layout: string) => void;
   onLockToggle: (id: string) => void;
   onLayerPropChange: (id: string, field: string, value: unknown) => void;
   onSwitchToItems: () => void;
 }
-
-const LAYER_LABELS: Record<LayerType, string> = {
-  top: '顶板',
-  countertop: '台面',
-  shelf: '隔板',
-  bottom: '底板',
-};
 
 const PADDING = 14;
 const panel: React.CSSProperties = {
@@ -57,88 +56,115 @@ interface NumProps {
   onChange: (v: number) => void;
 }
 
-/** 层参数数值输入（可锁定时禁用） */
+/** 层参数数值输入（可锁定时禁用）；失焦/回车才提交，见 DeferredNumberInput */
 const Num: React.FC<NumProps> = ({ value, min, max, disabled, onChange }) => (
-  <InputNumber
-    value={value} hideButtons size="small" style={{ width: '100%' }}
+  <DeferredNumberInput
+    value={value} size="small" style={{ width: '100%' }}
     min={min ?? 0.1} max={max}
     disabled={disabled}
-    onChange={(v) => {
-      // 允许键盘流畅输入：值为空/删除时不更新，避免跳变为 1
-      if (v === '' || v === null || v === undefined) return;
-      const n = Number(v);
-      if (!isNaN(n)) onChange(n);
-    }}
+    onCommit={onChange}
   />
 );
 
-const LayerEditor: React.FC<LayerEditorProps> = ({ layer, shelfNumber, dimensions, onDetailChange, onLayoutChange, onLockToggle, onLayerPropChange, onSwitchToItems }) => {
+const LayerEditor: React.FC<LayerEditorProps> = ({ layer, shelfNumber, dimensions, profile, onDetailChange, onLayoutChange, onLockToggle, onLayerPropChange, onSwitchToItems }) => {
+  const t = useT();
   const layoutRowRef = useRef<HTMLDivElement>(null);
 
   if (!layer) {
     return (
       <div style={{ padding: 16, fontSize: 13, color: 'var(--semi-color-text-2)', textAlign: 'center' }}>
-        点击左侧层以编辑参数
+        {t('editor.pickLayer')}
       </div>
     );
   }
 
   const { detail } = layer;
+  /** 顶板/台面/隔板有边框型材；底板只有板本身 */
+  const hasFrame = layer.type === 'top' || layer.type === 'countertop' || layer.type === 'shelf';
+  const profileStd = profile[0] || 'GB';
+  const globalSpecLabel = profile[0] ? `${profile[0]}-${profile[1]}` : t('common.custom');
 
   return (
     <div style={{ padding: '10px 8px', display: 'flex', flexDirection: 'column', gap: 10, fontSize: 13 }}>
       {/* 标题栏 */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 2px' }}>
         <span style={{ fontWeight: 700, fontSize: 15, color: layer.color }}>
-          {LAYER_LABELS[layer.type]}{layer.type === 'shelf' && shelfNumber ? ` #${shelfNumber}` : ''}
+          {t(LAYER_TYPE_KEY[layer.type])}{layer.type === 'shelf' && shelfNumber ? ` #${shelfNumber}` : ''}
         </span>
-        <Button
-          theme="borderless" size="small"
-          icon={<span style={{ fontSize: 14 }}>{detail.locked ? '🔒' : '🔓'}</span>}
-          onClick={() => onLockToggle(layer.id)}
-          style={{ color: detail.locked ? 'var(--semi-color-primary)' : 'var(--semi-color-text-2)' }}
-        />
+        <Tooltip
+          position="bottomRight"
+          content={detail.locked
+            ? t('editor.lockedTip')
+            : t('editor.unlockedTip')}
+        >
+          <Button
+            theme="borderless" size="small"
+            icon={<span style={{ fontSize: 14 }}>{detail.locked ? '🔒' : '🔓'}</span>}
+            onClick={() => onLockToggle(layer.id)}
+            style={{ color: detail.locked ? 'var(--semi-color-primary)' : 'var(--semi-color-text-2)' }}
+          />
+        </Tooltip>
       </div>
 
       {/* 统一底板 */}
       <div style={panel}>
 
         {/* ── 尺寸 ── */}
-        <div style={sectionTitle}>尺寸</div>
+        <div style={sectionTitle}>{t('section.size')}</div>
         <div style={row}>
           <div style={fieldWrap}>
-            <div style={label}>长 (mm)</div>
+            <div style={label}>{t('layer.length')}</div>
             <Num value={detail.length} min={1} max={dimensions.width} disabled={detail.locked} onChange={(v) => onDetailChange(layer.id, 'length', v)} />
           </div>
           <div style={fieldWrap}>
-            <div style={label}>宽 (mm)</div>
+            <div style={label}>{t('layer.width')}</div>
             <Num value={detail.width} min={1} max={dimensions.depth} disabled={detail.locked} onChange={(v) => onDetailChange(layer.id, 'width', v)} />
           </div>
         </div>
         <div style={row}>
           <div style={fieldWrap}>
-            <div style={label}>标高 (mm)</div>
+            <div style={label}>{t('layer.elevation')}</div>
             <Num value={detail.elevation} min={0} max={dimensions.height}
               disabled={layer.type === 'top' || layer.type === 'bottom'}
               onChange={(v) => onDetailChange(layer.id, 'elevation', v)} />
           </div>
           <div style={fieldWrap}>
-            <div style={label}>厚度 (mm)</div>
+            <div style={label}>{t('layer.thickness')}</div>
             <Num value={detail.thickness} min={0.1} max={dimensions.height} disabled={detail.locked} onChange={(v) => onDetailChange(layer.id, 'thickness', v)} />
           </div>
         </div>
 
+        {/* ── 本层边框型材（覆盖机架主型材，影响该层边框下料长度与 BOM 规格） ── */}
+        {hasFrame && (
+          <div style={{ ...fieldWrap, marginTop: 10 }}>
+            <div style={label}>{t('label.edgeProfile')}</div>
+            <Tooltip content={t('tip.edgeProfile')} position="left">
+              <Select
+                value={detail.profileType || ''}
+                onChange={(v) => onLayerPropChange(layer.id, 'profileType', v)}
+                style={{ width: '100%' }}
+                size="small"
+                disabled={detail.locked}
+              >
+                <Select.Option value="">{t('option.followFrame', { spec: globalSpecLabel })}</Select.Option>
+                {PROFILE_SIZES.map((m) => (
+                  <Select.Option key={m} value={`${profileStd}-${m}`}>{`${profileStd}-${m}`}</Select.Option>
+                ))}
+              </Select>
+            </Tooltip>
+          </div>
+        )}
         {/* ── 结构 ── */}
         {(layer.type === 'countertop' || layer.type === 'shelf') && (
           <>
             <div style={divider} />
-            <div style={sectionTitle}>结构</div>
+            <div style={sectionTitle}>{t('section.structure')}</div>
 
             <div style={fieldWrap}>
-              <div style={label}>前端连接</div>
+              <div style={label}>{t('label.frontConnect')}</div>
               {detail.width >= dimensions.depth ? (
                 <div style={{ fontSize: 12, color: 'var(--semi-color-text-2)', padding: '4px 0' }}>
-                  层宽达到柜深，自动延伸至立柱
+                  {t('hint.autoExtend')}
                 </div>
               ) : (
                 <Select
@@ -146,9 +172,9 @@ const LayerEditor: React.FC<LayerEditorProps> = ({ layer, shelfNumber, dimension
                   onChange={(v) => onLayerPropChange(layer.id, 'frontConnect', v)}
                   style={{ width: '100%' }} size="small"
                 >
-                  <Select.Option value="extend">延伸至立柱</Select.Option>
-                  <Select.Option value="up">上连型材</Select.Option>
-                  <Select.Option value="down">下连型材</Select.Option>
+                  <Select.Option value="extend">{t('option.connectExtend')}</Select.Option>
+                  <Select.Option value="up">{t('option.connectUp')}</Select.Option>
+                  <Select.Option value="down">{t('option.connectDown')}</Select.Option>
                 </Select>
               )}
             </div>
@@ -156,21 +182,21 @@ const LayerEditor: React.FC<LayerEditorProps> = ({ layer, shelfNumber, dimension
             {/* 搁板对齐位置 */}
             {detail.width < dimensions.depth && (
               <div style={fieldWrap}>
-                <div style={label}>位置</div>
+                <div style={label}>{t('label.halign')}</div>
                 <Select
                   value={detail.halign || 'left'}
                   onChange={(v) => onLayerPropChange(layer.id, 'halign', v)}
                   style={{ width: '100%' }} size="small"
                 >
-                  <Select.Option value="left">靠左</Select.Option>
-                  <Select.Option value="center">居中</Select.Option>
-                  <Select.Option value="right">靠右</Select.Option>
+                  <Select.Option value="left">{t('option.alignLeft')}</Select.Option>
+                  <Select.Option value="center">{t('option.alignCenter')}</Select.Option>
+                  <Select.Option value="right">{t('option.alignRight')}</Select.Option>
                 </Select>
               </div>
             )}
 
             <div style={{ ...fieldWrap, marginBottom: 0 }}>
-              <div style={label}>加强筋</div>
+              <div style={label}>{t('label.ribs')}</div>
               <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
                 <Num value={detail.ribCount} min={0} max={20} disabled={detail.locked} onChange={(v) => onDetailChange(layer.id, 'ribCount', v)} />
                 <Button
@@ -178,7 +204,7 @@ const LayerEditor: React.FC<LayerEditorProps> = ({ layer, shelfNumber, dimension
                   onClick={() => onLayerPropChange(layer.id, 'ribDirection', detail.ribDirection === 'x' ? 'z' : 'x')}
                   style={{ fontSize: 11, padding: '2px 6px', minWidth: 40, flexShrink: 0 }}
                 >
-                  {detail.ribDirection === 'x' ? '横向' : '纵向'}
+                  {detail.ribDirection === 'x' ? t('option.ribX') : t('option.ribZ')}
                 </Button>
               </div>
             </div>
@@ -189,13 +215,13 @@ const LayerEditor: React.FC<LayerEditorProps> = ({ layer, shelfNumber, dimension
         {layer.type === 'top' && (
           <>
             <div style={divider} />
-            <div style={sectionTitle}>立杆连接</div>
+            <div style={sectionTitle}>{t('section.uprights')}</div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4 }}>
               {([
-                { key: 'fl', label: '前左' },
-                { key: 'fr', label: '前右' },
-                { key: 'bl', label: '后左' },
-                { key: 'br', label: '后右' },
+                { key: 'fl', label: t('corner.fl') },
+                { key: 'fr', label: t('corner.fr') },
+                { key: 'bl', label: t('corner.bl') },
+                { key: 'br', label: t('corner.br') },
               ] as Array<{ key: keyof NonNullable<LayerDetail['topColumns']>; label: string }>).map(({ key, label: lb }) => (
                 <label key={key} style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer' }}>
                   <input type="checkbox" checked={detail.topColumns?.[key] ?? true}
@@ -205,7 +231,7 @@ const LayerEditor: React.FC<LayerEditorProps> = ({ layer, shelfNumber, dimension
               ))}
             </div>
             {[detail.topColumns?.fl, detail.topColumns?.fr, detail.topColumns?.bl, detail.topColumns?.br].filter(Boolean).length < 2 && (
-              <div style={{ fontSize: 11, color: 'var(--semi-color-danger)', marginTop: 4 }}>至少选择两根立杆</div>
+              <div style={{ fontSize: 11, color: 'var(--semi-color-danger)', marginTop: 4 }}>{t('hint.needTwoUprights')}</div>
             )}
           </>
         )}
@@ -214,12 +240,12 @@ const LayerEditor: React.FC<LayerEditorProps> = ({ layer, shelfNumber, dimension
         {(layer.type === 'countertop' || layer.type === 'shelf') && (
           <>
             <div style={divider} />
-            <div style={sectionTitle}>布局（列 × 行）</div>
+            <div style={sectionTitle}>{t('section.layout')}</div>
             <div ref={layoutRowRef} style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-              <InputNumber
+              <DeferredNumberInput
                 value={detail.layout ? Number(detail.layout.split('X')[0]) || undefined : undefined}
-                hideButtons size="small" style={{ width: '100%' }} min={1} max={99}
-                onChange={(v) => {
+                size="small" style={{ width: '100%' }} min={1} max={99}
+                onCommit={(v) => {
                   const a = String(Number(v) || '');
                   const inputs = layoutRowRef.current?.querySelectorAll('.semi-input-number');
                   const bEl = inputs?.[1]?.querySelector('input') as HTMLInputElement | undefined;
@@ -228,10 +254,10 @@ const LayerEditor: React.FC<LayerEditorProps> = ({ layer, shelfNumber, dimension
                 }}
               />
               <span style={{ color: 'var(--semi-color-text-2)', fontSize: 13, flexShrink: 0 }}>×</span>
-              <InputNumber
+              <DeferredNumberInput
                 value={detail.layout ? Number(detail.layout.split('X')[1]) || undefined : undefined}
-                hideButtons size="small" style={{ width: '100%' }} min={1} max={99}
-                onChange={(v) => {
+                size="small" style={{ width: '100%' }} min={1} max={99}
+                onCommit={(v) => {
                   const inputs = layoutRowRef.current?.querySelectorAll('.semi-input-number');
                   const aEl = inputs?.[0]?.querySelector('input') as HTMLInputElement | undefined;
                   const a = aEl ? String(Number(aEl.value) || '') : '';
@@ -250,7 +276,7 @@ const LayerEditor: React.FC<LayerEditorProps> = ({ layer, shelfNumber, dimension
                 onClick={onSwitchToItems}
                 style={{ marginTop: 8 }}
               >
-                放置物品
+                {t('action.placeItem')}
               </Button>
             )}
           </>

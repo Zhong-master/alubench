@@ -2,8 +2,20 @@
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>VisionAI 3D Workbench</title>
+    <meta
+      name="description"
+      content="工业铝型材机架 3D 场景编辑器：多层隔板/台面结构设计、物品放置、BOM 切割清单与采购清单导出，支持离线使用。"
+    />
+    <!-- PWA：可安装到桌面 / 手机主屏，安装后离线可用（见 public/sw.js） -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="theme-color" content="#111111" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon-180.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="3D Workbench" />
   </head>
   <body>
     <div id="root"></div>

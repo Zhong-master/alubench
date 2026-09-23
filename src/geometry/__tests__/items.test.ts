@@ -47,4 +47,34 @@ describe('computePlacements — 物品占位计算（尺寸真实性）', () => 
     const noItem = makeLayer({ id: 'b', type: 'shelf', layout: '2X2', placedItems: [] });
     expect(computePlacements(noItem, 850)).toEqual([]);
   });
+
+  it('旋转 90° 时基准缩放按互换后的包围盒计算（不会一旋转就超界）', () => {
+    const l = {
+      ...layer,
+      detail: { ...layer.detail, placedItems: [{ col: 1, row: 1, itemType: 'industrial-pc' as const, rotation: 90 }] },
+    };
+    const p = computePlacements(l, 850)[0];
+    // 工控机 0.32(X)×0.28(Z) 旋转后：X 占 0.28、Z 占 0.32；单元 0.4×0.2833
+    // baseScale = min(0.4*0.85/0.28, 0.2833*0.85/0.32) = 0.7526
+    expect(p.rotation).toBe(90);
+    expect(p.baseScale).toBeCloseTo(0.7526, 3);
+    // 旋转后的外包络落在单元内
+    expect(0.28 * p.scale).toBeLessThanOrEqual(0.4 + 1e-9);
+    expect(0.32 * p.scale).toBeLessThanOrEqual(0.28334 + 1e-9);
+  });
+
+  it('传入上方净空时，基准缩放额外受限于「不穿透上层板」', () => {
+    const l = makeLayer({
+      id: 'shelf', type: 'shelf', elevation: 550, layout: '1X1',
+      placedItems: [{ col: 0, row: 0, itemType: 'pda' }],
+    });
+    // 无净空限制：PDA 0.15×0.06 被放大填满 1.6×0.85 的单元（9.07×）
+    expect(computePlacements(l, 850)[0].baseScale).toBeCloseTo(9.0667, 3);
+    // 上方层板底面 795mm → 净空 239mm，高 70mm 的 PDA 最多放大 3.41×
+    const clamped = computePlacements(l, 850, 795)[0];
+    expect(clamped.baseScale).toBeCloseTo(3.4143, 3);
+    expect(clamped.worldSize[2]).toBeLessThanOrEqual(0.239 + 1e-9);
+    // 净空极小时保留下限（不压成看不见的小点），穿透留给校验提示
+    expect(computePlacements(l, 850, 600)[0].baseScale).toBeCloseTo(9.0667 * 0.3, 3);
+  });
 });

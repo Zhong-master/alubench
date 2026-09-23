@@ -185,6 +185,47 @@ function drawThumbnail(ctx: CanvasRenderingContext2D, type: ItemType, size: numb
       ctx.stroke();
       break;
 
+    // ── 显示器 ──
+    case 'monitor':
+      rect(ctx, cx - r * 0.62, cy - r * 0.5, r * 1.24, r * 0.72, '#1c1e22', 3);
+      rect(ctx, cx - r * 0.56, cy - r * 0.44, r * 1.12, r * 0.6, '#3f7fd0', 2);
+      rect(ctx, cx - r * 0.06, cy + r * 0.22, r * 0.12, r * 0.16, '#3a3f45', 1);
+      rect(ctx, cx - r * 0.26, cy + r * 0.38, r * 0.52, r * 0.06, '#2f3338', 2);
+      break;
+
+    // ── 键盘 ──
+    case 'keyboard':
+      rect(ctx, cx - r * 0.62, cy - r * 0.32, r * 1.24, r * 0.64, '#2a2a2a', 3);
+      for (let i = 0; i < 4; i++) {
+        rect(ctx, cx - r * 0.54, cy - r * 0.22 + i * r * 0.13, r * 1.08, r * 0.08, '#3a3a3a', 2);
+      }
+      break;
+
+    // ── 工业交换机 ──
+    case 'ethernet-switch':
+      rect(ctx, cx - r * 0.7, cy - r * 0.28, r * 1.4, r * 0.56, '#3a4048', 3);
+      for (let i = 0; i < 6; i++) {
+        rect(ctx, cx - r * 0.6 + i * r * 0.2, cy - r * 0.1, r * 0.13, r * 0.2, '#8a929c', 1);
+      }
+      dot(ctx, cx - r * 0.5, cy + r * 0.16, 2, '#4ade80');
+      break;
+
+    // ── UPS ──
+    case 'ups':
+      rect(ctx, cx - r * 0.45, cy - r * 0.5, r * 0.9, r * 1.0, '#2b2f36', 3);
+      rect(ctx, cx - r * 0.32, cy - r * 0.38, r * 0.64, r * 0.22, '#111418', 2);
+      dot(ctx, cx - r * 0.16, cy - r * 0.27, 2, '#4ade80');
+      dot(ctx, cx - r * 0.02, cy - r * 0.27, 2, '#555b63');
+      break;
+
+    // ── 工具柜 ──
+    case 'drawer-unit':
+      rect(ctx, cx - r * 0.62, cy - r * 0.55, r * 1.24, r * 1.1, '#5c636b', 3);
+      for (let i = 0; i < 3; i++) {
+        rect(ctx, cx - r * 0.54, cy - r * 0.44 + i * r * 0.36, r * 1.08, r * 0.28, '#6b7480', 2);
+        rect(ctx, cx - r * 0.18, cy - r * 0.32 + i * r * 0.36, r * 0.36, r * 0.05, '#c8ccd2', 1);
+      }
+      break;
   }
 }
 

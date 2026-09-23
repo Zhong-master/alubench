@@ -2,22 +2,23 @@ import type { AppState } from '../state';
 import type { BeamInstance, BoardInstance, SceneGeometry } from './types';
 import { getFrameContext, layerMM, layerSpec, profileMMOf, profileSpec } from './context';
 import { buildFrameBeams } from './frame';
-import { boardLabel, buildAllLayers, buildLayerGeometry, zOffsetOf } from './layer';
+import { boardLabel, buildAllLayers, buildLayerGeometry, nearestLayerAbove, nearestLayerBelow, shelfIndex, zOffsetOf } from './layer';
 import { computePlacements } from './items';
-import { aggregateBom, bomTotals } from './aggregate';
-import { validate } from './validate';
+import { aggregateBom, aggregateBoards, bomTotals } from './aggregate';
+import { validate, validateGeometry } from './validate';
 
 export type {
   BeamInstance, BoardInstance, FrameContext, ItemPlacement, SceneGeometry,
   Face, CornerKey, TopColumns, LayerGeometry,
 } from './types';
-export type { BomProfileRow } from './aggregate';
+export type { BomProfileRow, BoardRow } from './aggregate';
 export type { ValidationIssue } from './validate';
 
 export {
   getFrameContext, layerMM, layerSpec, profileMMOf, profileSpec,
-  buildFrameBeams, buildLayerGeometry, buildAllLayers, boardLabel, zOffsetOf,
-  computePlacements, aggregateBom, bomTotals, validate,
+  buildFrameBeams, buildLayerGeometry, buildAllLayers, boardLabel, shelfIndex, zOffsetOf,
+  nearestLayerAbove, nearestLayerBelow,
+  computePlacements, aggregateBom, aggregateBoards, bomTotals, validate, validateGeometry,
 };
 
 /**
@@ -27,7 +28,12 @@ export {
 export function buildSceneGeometry(state: AppState): SceneGeometry {
   const ctx = getFrameContext(state);
   const frameBeams = buildFrameBeams(ctx, state.columns);
-  const layers = buildAllLayers(state.layers, ctx, (layer) => computePlacements(layer, ctx.D));
+  const layers = buildAllLayers(state.layers, ctx, (layer) => {
+    // 上方最近层的底面标高（mm）作为物品净空上限；上方无层则不限
+    const above = nearestLayerAbove(state.layers, layer.detail.elevation, layer.id);
+    const ceiling = above ? above.detail.elevation - above.detail.thickness / 2 : undefined;
+    return computePlacements(layer, ctx.D, ceiling);
+  });
   return { frameBeams, layers };
 }
 

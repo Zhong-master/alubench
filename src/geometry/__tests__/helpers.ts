@@ -2,7 +2,7 @@ import type { Layer, LayerDetail } from '../../components/LeftPanel';
 
 /** LayerDetail 字段名（供 makeLayer 将测试传入的 detail 字段映射到 detail 内） */
 const DETAIL_KEYS = [
-  'length', 'width', 'elevation', 'thickness', 'layout', 'items', 'placedItems',
+  'length', 'width', 'elevation', 'thickness', 'layout', 'placedItems',
   'locked', 'profileType', 'ribCount', 'ribDirection', 'frontConnect', 'halign', 'topColumns',
 ] as const;
 
@@ -16,7 +16,6 @@ export function makeLayer(partial: { id: string; type: Layer['type'] } & Partial
     elevation: 0,
     thickness: 10,
     layout: '',
-    items: [],
     placedItems: [],
     locked: false,
     profileType: '',

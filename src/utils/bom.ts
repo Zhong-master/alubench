@@ -1,6 +1,9 @@
 import type { AppState } from '../state';
-import { aggregateBom, bomTotals, buildSceneGeometry } from '../geometry';
-import type { BoardInstance, BomProfileRow } from '../geometry';
+import { aggregateBom, aggregateBoards, bomTotals, buildSceneGeometry } from '../geometry';
+import { boardKeyword, profileKeyword } from './procurement';
+import type { BoardInstance, BomProfileRow, SceneGeometry } from '../geometry';
+import type { Locale } from '../i18n';
+import { localizeLayerLabel, localizeProfileSpec, tFor } from '../i18n/labels';
 
 /**
  * BOM / 切割清单生成器
@@ -21,8 +24,13 @@ export interface BomResult {
   totalProfileLength: number;
 }
 
-export function computeBom(state: AppState): BomResult {
-  const geo = buildSceneGeometry(state);
+/**
+ * 从**已有**几何内核结果聚合 BOM。
+ *
+ * UI 每次状态变更只需算一次 `buildSceneGeometry`，BOM / 校验 / 3D 场景共用同一份实例，
+ * 避免同一状态被重复计算三遍（大场景下每次拖拽都要多算两次全量几何）。
+ */
+export function computeBomFromGeometry(geo: SceneGeometry): BomResult {
   const allBeams = geo.frameBeams.concat(geo.layers.flatMap((l) => l.beams));
   const profiles = aggregateBom(allBeams);
   const { count, length } = bomTotals(allBeams);
@@ -34,38 +42,68 @@ export function computeBom(state: AppState): BomResult {
   };
 }
 
+/** 从参数层直接计算（单测/独立调用入口；内部自建几何，UI 请用 `computeBomFromGeometry`） */
+export function computeBom(state: AppState): BomResult {
+  return computeBomFromGeometry(buildSceneGeometry(state));
+}
+
 // ── 导出格式 ──
 
 /** CSV 下载（UTF-8 BOM，Excel/WPS 直接打开中文不乱码） */
-export function bomToCsv(bom: BomResult): string {
+/** CSV 单元格转义：含逗号/引号/换行时按 RFC 4180 加引号（规格与名称理论上可能带这些字符） */
+function csvCell(value: string | number): string {
+  const text = String(value);
+  return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+}
+
+export function bomToCsv(bom: BomResult, locale: Locale = 'zh'): string {
+  const t = tFor(locale);
   const lines: string[] = [];
-  lines.push('类别,规格,长度(mm),数量,合计(mm)');
+  // 末列「采购关键词」可直接粘进 1688/淘宝/怡合达/米思米 的搜索框，省去手工拼规格
+  lines.push(t('csv.header'));
   for (const r of bom.profiles) {
-    lines.push(`型材,${r.spec},${r.length},${r.count},${r.count * r.length}`);
+    lines.push(
+      [t('bom.typeProfile'), r.spec, r.length, r.count, r.count * r.length, profileKeyword(r.spec, r.length)]
+        .map(csvCell)
+        .join(',')
+    );
   }
-  for (const b of bom.boards) {
-    lines.push(`板材,${b.label} ${b.length}×${b.width}×${b.thickness},${b.length},1,${b.length}`);
+  // 板材合并后统计块数（原来一块一行，"数量"恒为 1，采购时无法直接下单）
+  for (const b of aggregateBoards(bom.boards)) {
+    lines.push(
+      [
+        t('bom.typeBoard'),
+        `${localizeLayerLabel(b.label, t)} ${b.length}×${b.width}×${b.thickness}`,
+        b.length,
+        b.count,
+        b.length * b.count,
+        boardKeyword(b.label, b.length, b.width, b.thickness),
+      ]
+        .map(csvCell)
+        .join(',')
+    );
   }
   return '﻿' + lines.join('\r\n');
 }
 
 /** 自包含 HTML 报告（可打印、可分享） */
-export function bomToHtml(bom: BomResult, state: AppState): string {
+export function bomToHtml(bom: BomResult, state: AppState, locale: Locale = 'zh'): string {
+  const t = tFor(locale);
   const dims = state.dimensions;
-  const spec = state.profile[0] ? `${state.profile[0]}-${state.profile[1]}` : '自定义';
-  const now = new Date().toLocaleString('zh-CN');
+  const spec = localizeProfileSpec(state.profile[0] ? `${state.profile[0]}-${state.profile[1]}` : '自定义', t);
+  const now = new Date().toLocaleString(locale === 'en' ? 'en-US' : 'zh-CN');
   const profileRows = bom.profiles
     .map((r, i) => `<tr><td>${i + 1}</td><td>${r.spec}</td><td>${r.length}</td><td>${r.count}</td><td>${r.count * r.length}</td></tr>`)
     .join('');
-  const boardRows = bom.boards
-    .map((b, i) => `<tr><td>${i + 1}</td><td>${b.label}</td><td>${b.length} × ${b.width}</td><td>${b.thickness}</td><td>1</td></tr>`)
+  const boardRows = aggregateBoards(bom.boards)
+    .map((b, i) => `<tr><td>${i + 1}</td><td>${localizeLayerLabel(b.label, t)}</td><td>${b.length} × ${b.width}</td><td>${b.thickness}</td><td>${b.count}</td></tr>`)
     .join('');
 
   return `<!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="${locale === 'en' ? 'en' : 'zh-CN'}">
 <head>
 <meta charset="UTF-8">
-<title>VisionAI 3D Workbench - 切割清单</title>
+<title>${t('doc.reportTitle')}</title>
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body { font: 13px/1.6 "Microsoft YaHei", "PingFang SC", sans-serif; color: #222; padding: 24px; max-width: 860px; margin: 0 auto; }
@@ -83,26 +121,25 @@ td.num, th.num { text-align: right; }
 </style>
 </head>
 <body>
-<h1>VisionAI 3D Workbench — 切割清单</h1>
-<div class="sub">生成时间：${now}</div>
+<h1>${t('doc.reportH1')}</h1>
+<div class="sub">${t('doc.reportGenerated', { time: now })}</div>
 <div class="meta">
-  整体尺寸：<b>${dims.width} × ${dims.depth} × ${dims.height} mm</b>
-  &nbsp;·&nbsp; 主型材：<b>${spec}</b>
-  &nbsp;·&nbsp; 层数：<b>${state.layers.length}</b>
+  ${t('doc.reportDims')}<b>${dims.width} × ${dims.depth} × ${dims.height} mm</b>
+  &nbsp;·&nbsp; ${t('doc.reportProfile')}<b>${spec}</b>
+  &nbsp;·&nbsp; ${t('doc.reportLayers')}<b>${state.layers.length}</b>
 </div>
-<h2>型材下料清单（${bom.profiles.length} 种规格长度，共 ${bom.totalProfileCount} 根）</h2>
+<h2>${t('doc.reportProfilesH2', { kinds: bom.profiles.length, count: bom.totalProfileCount })}</h2>
 <table>
-<thead><tr><th>#</th><th>规格</th><th class="num">长度 (mm)</th><th class="num">数量</th><th class="num">合计 (mm)</th></tr></thead>
+<thead><tr><th>#</th><th>${t('bom.colSpec')}</th><th class="num">${t('bom.colLength')}</th><th class="num">${t('bom.colCount')}</th><th class="num">${t('bom.colTotal')}</th></tr></thead>
 <tbody>${profileRows}</tbody>
 </table>
-<h2>板材清单（${bom.boards.length} 块）</h2>
+<h2>${t('doc.reportBoardsH2', { count: bom.boards.length })}</h2>
 <table>
-<thead><tr><th>#</th><th>名称</th><th>尺寸 (长 × 宽)</th><th class="num">厚度 (mm)</th><th class="num">数量</th></tr></thead>
+<thead><tr><th>#</th><th>${t('bom.colName')}</th><th>${t('doc.colSize')}</th><th class="num">${t('doc.colThickness')}</th><th class="num">${t('bom.colCount')}</th></tr></thead>
 <tbody>${boardRows}</tbody>
 </table>
 <div class="summary">
-  型材总计：<b>${bom.totalProfileCount}</b> 根，下料长度合计 <b>${(bom.totalProfileLength / 1000).toFixed(2)} m</b>。
-  以上为结构型材与层板框架，连接件（角件/螺栓/T型螺母）需按组装图纸另行配置。
+  ${t('doc.summaryA')}<b>${bom.totalProfileCount}</b>${t('doc.summaryB')}<b>${(bom.totalProfileLength / 1000).toFixed(2)} m</b>${t('doc.summaryC')}
 </div>
 </body>
 </html>`;

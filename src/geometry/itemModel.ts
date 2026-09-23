@@ -1,4 +1,4 @@
-import type { ItemType } from '../components/items';
+import type { ItemType } from '../components/items/types';
 
 /**
  * 物品 3D 模型共享几何描述
@@ -214,6 +214,87 @@ export function getItemPrimitives(type: ItemType): ItemPrimitive[] {
         P('roundedBox', [0.3, 0.15, 0.2], '#a07030', { radius: 0.005, roughness: 0.8 }),
         P('box', [0.302, 0.151, 0.02], '#c09040', { pos: [0, 0, 0.101], transparent: true, opacity: 0.3 }),
         P('box', [0.302, 0.02, 0.202], '#c09040', { pos: [0, 0, 0], transparent: true, opacity: 0.3 }),
+      ];
+
+    // ── 显示器：面板 + 立柱 + 底座 ──
+    case 'monitor':
+      return [
+        P('roundedBox', [0.22, 0.016, 0.15], '#2f3338', { pos: [0, -0.172, 0.03], radius: 0.004, roughness: 0.5 }),
+        P('box', [0.045, 0.14, 0.028], '#3a3f45', { pos: [0, -0.1, 0], roughness: 0.5, metalness: 0.3 }),
+        P('roundedBox', [0.53, 0.31, 0.022], '#1c1e22', { pos: [0, 0.025, 0], radius: 0.006, roughness: 0.35 }),
+        P('box', [0.51, 0.29, 0.004], '#3f7fd0', {
+          pos: [0, 0.025, 0.012],
+          roughness: 0.25,
+          emissive: '#1b3f6b',
+          emissiveIntensity: 0.35,
+        }),
+      ];
+
+    // ── 键盘：底板 + 四条键区 ──
+    case 'keyboard':
+      return [
+        P('roundedBox', [0.43, 0.015, 0.13], '#2a2a2a', { radius: 0.004, roughness: 0.6 }),
+        ...Array.from({ length: 4 }, (_, i) =>
+          P('roundedBox', [0.4, 0.005, 0.024], '#3a3a3a', {
+            pos: [0, 0.01, -0.045 + i * 0.03],
+            radius: 0.002,
+            roughness: 0.5,
+          })),
+      ];
+
+    // ── 工业交换机：金属壳 + 8 个 RJ45 + 指示灯 ──
+    case 'ethernet-switch':
+      return [
+        P('roundedBox', [0.19, 0.04, 0.11], '#3a4048', { radius: 0.003, roughness: 0.5, metalness: 0.4 }),
+        ...Array.from({ length: 8 }, (_, i) =>
+          P('box', [0.016, 0.014, 0.005], '#8a929c', {
+            pos: [-0.07 + i * 0.02, 0.002, 0.056],
+            roughness: 0.5,
+          })),
+        P('box', [0.014, 0.012, 0.005], '#22262b', { pos: [0.085, 0.002, 0.056], roughness: 0.6 }),
+        P('circle', [0.003, 8], '#4ade80', { pos: [-0.085, 0.014, 0.058], emissive: '#4ade80', emissiveIntensity: 0.7 }),
+        P('circle', [0.003, 8], '#facc15', { pos: [-0.075, 0.014, 0.058], emissive: '#facc15', emissiveIntensity: 0.5 }),
+      ];
+
+    // ── UPS：塔式机身 + 前面板 + 后部插座 ──
+    case 'ups':
+      return [
+        P('roundedBox', [0.14, 0.18, 0.29], '#2b2f36', { radius: 0.005, roughness: 0.5 }),
+        P('box', [0.11, 0.045, 0.005], '#111418', { pos: [0, 0.045, 0.146], roughness: 0.4 }),
+        P('circle', [0.004, 10], '#4ade80', { pos: [-0.035, 0.045, 0.15], emissive: '#4ade80', emissiveIntensity: 0.6 }),
+        P('circle', [0.004, 10], '#555b63', { pos: [0, 0.045, 0.15], roughness: 0.5 }),
+        P('circle', [0.004, 10], '#555b63', { pos: [0.035, 0.045, 0.15], roughness: 0.5 }),
+        P('box', [0.05, 0.04, 0.006], '#1a1d21', { pos: [-0.035, -0.045, -0.146], roughness: 0.6 }),
+        P('box', [0.05, 0.04, 0.006], '#1a1d21', { pos: [0.035, -0.045, -0.146], roughness: 0.6 }),
+        P('box', [0.1, 0.006, 0.02], '#20242a', { pos: [0, 0.09, 0], roughness: 0.7 }),
+      ];
+
+    // ── 工具柜：柜体 + 台面 + 三层抽屉 + 脚轮 ──
+    case 'drawer-unit':
+      return [
+        P('box', [0.38, 0.28, 0.42], '#5c636b', { roughness: 0.5, metalness: 0.35 }),
+        P('box', [0.4, 0.02, 0.44], '#6b727a', { pos: [0, 0.15, 0], roughness: 0.45, metalness: 0.3 }),
+        ...Array.from({ length: 3 }, (_, i) =>
+          P('roundedBox', [0.36, 0.075, 0.006], '#6b7480', {
+            pos: [0, 0.09 - i * 0.09, 0.214],
+            radius: 0.003,
+            roughness: 0.45,
+          })),
+        ...Array.from({ length: 3 }, (_, i) =>
+          P('box', [0.1, 0.012, 0.014], '#c8ccd2', {
+            pos: [0, 0.055 - i * 0.09, 0.222],
+            metalness: 0.6,
+            roughness: 0.3,
+          })),
+        ...[-0.15, 0.15].flatMap((x) =>
+          [-0.17, 0.17].map((z) =>
+            P('cylinder', [0.022, 0.022, 0.02, 10], '#22262b', {
+              pos: [x, -0.155, z],
+              rot: [Math.PI / 2, 0, 0],
+              roughness: 0.6,
+            })
+          )
+        ),
       ];
 
     default:

@@ -1,7 +1,10 @@
 import { useMemo } from 'react';
-import { Table } from '@douyinfe/semi-ui';
+import { Button, Table, Tooltip } from '@douyinfe/semi-ui';
 import type { ColumnProps, Data } from '@douyinfe/semi-ui/lib/es/table/interface';
-import { IconHandle } from '@douyinfe/semi-icons';
+import { IconHandle, IconChevronUp, IconChevronDown } from '@douyinfe/semi-icons';
+import { useT } from '../i18n';
+import { localizeLayerLabel } from '../i18n/labels';
+import type { MessageKey } from '../i18n/messages';
 import type { Layer } from './LeftPanel';
 import { ITEM_MAP } from './items';
 
@@ -12,9 +15,12 @@ interface BottomBarProps {
   onDragStart: (id: string) => void;
   onDragOver: (id: string) => void;
   onDragEnd: () => void;
+  /** 窄屏/触摸端：表格右侧显示上移/下移按钮（HTML5 拖拽在触摸屏上不触发事件） */
+  compact?: boolean;
+  onMoveLayer?: (id: string, dir: -1 | 1) => void;
 }
 
-const COLUMNS = (layers: Layer[]) => [
+const COLUMNS = (layers: Layer[], t: (k: MessageKey) => string) => [
   {
     title: '',
     dataIndex: 'drag',
@@ -22,9 +28,11 @@ const COLUMNS = (layers: Layer[]) => [
     render: (_: unknown, record: Layer) => {
       const canDrag = record.type === 'countertop' || record.type === 'shelf';
       return canDrag ? (
-        <span style={{ cursor: 'grab', display: 'inline-flex', alignItems: 'center', color: 'var(--semi-color-text-2)' }}>
-          <IconHandle size="small" />
-        </span>
+        <Tooltip content={t('layer.dragTip')} position="right" mouseEnterDelay={0.5}>
+          <span style={{ cursor: 'grab', display: 'inline-flex', alignItems: 'center', color: 'var(--semi-color-text-2)' }}>
+            <IconHandle size="small" />
+          </span>
+        </Tooltip>
       ) : null;
     },
   },
@@ -39,8 +47,10 @@ const COLUMNS = (layers: Layer[]) => [
     ),
   },
   {
-    title: '层', dataIndex: 'label', width: 40,
-    render: (_: unknown, record: Layer) => <span style={{ fontSize: 12, fontWeight: 500 }}>{record.label}</span>,
+    title: t('layer.type'), dataIndex: 'label', width: 40,
+    render: (_: unknown, record: Layer) => (
+      <span style={{ fontSize: 12, fontWeight: 500 }}>{localizeLayerLabel(record.label, t)}</span>
+    ),
   },
   {
     title: 'ID', dataIndex: 'id', width: 32,
@@ -54,23 +64,23 @@ const COLUMNS = (layers: Layer[]) => [
     },
   },
   {
-    title: '长(mm)', dataIndex: 'detail.length', width: 60,
+    title: t('layer.length'), dataIndex: 'detail.length', width: 60,
     render: (_: unknown, record: Layer) => <span style={{ fontSize: 12 }}>{record.detail.length}</span>,
   },
   {
-    title: '宽(mm)', dataIndex: 'detail.width', width: 60,
+    title: t('layer.width'), dataIndex: 'detail.width', width: 60,
     render: (_: unknown, record: Layer) => <span style={{ fontSize: 12 }}>{record.detail.width}</span>,
   },
   {
-    title: '标高(mm)', dataIndex: 'detail.elevation', width: 60,
+    title: t('layer.elevation'), dataIndex: 'detail.elevation', width: 60,
     render: (_: unknown, record: Layer) => <span style={{ fontSize: 12 }}>{record.detail.elevation}</span>,
   },
   {
-    title: '厚度(mm)', dataIndex: 'detail.thickness', width: 60,
+    title: t('layer.thickness'), dataIndex: 'detail.thickness', width: 60,
     render: (_: unknown, record: Layer) => <span style={{ fontSize: 12 }}>{record.detail.thickness}</span>,
   },
   {
-    title: '布局', dataIndex: 'detail.layout', width: 48,
+    title: t('layer.layout'), dataIndex: 'detail.layout', width: 48,
     render: (_: unknown, record: Layer) => (
       <span style={{ fontSize: 12, color: 'var(--semi-color-text-2)' }}>
         {record.detail.layout ? record.detail.layout.replace('X', ' × ') : '-'}
@@ -78,7 +88,7 @@ const COLUMNS = (layers: Layer[]) => [
     ),
   },
   {
-    title: '物品', dataIndex: 'detail.items', width: 120,
+    title: t('layer.items'), dataIndex: 'detail.placedItems', width: 120,
     render: (_: unknown, record: Layer) => {
       const items = record.detail.placedItems;
       if (!items || items.length === 0) return <span style={{ fontSize: 12, color: 'var(--semi-color-text-2)' }}>-</span>;
@@ -101,11 +111,35 @@ const COLUMNS = (layers: Layer[]) => [
   },
 ];
 
-const BottomBarTable: React.FC<BottomBarProps> = ({ layers, selectedId, onSelect, onDragStart, onDragOver, onDragEnd }) => {
-  const columns = useMemo(
-    () => COLUMNS(layers),
-    [layers]
-  );
+const BottomBarTable: React.FC<BottomBarProps> = ({ layers, selectedId, onSelect, onDragStart, onDragOver, onDragEnd, compact, onMoveLayer }) => {
+  const t = useT();
+  const columns = useMemo(() => {
+    const base = COLUMNS(layers, t);
+    if (!compact || !onMoveLayer) return base;
+    // 触摸端 ⠿ 拖拽把手无效（HTML5 拖拽不派发事件），直接用它占的首列换成上移/下移——
+    // 若把排序列追加到末尾会落到横向滚动区之外（实测 390px 视口下按钮在 x=651，够不到）
+    const rest = base.filter((c) => (c as { dataIndex?: string }).dataIndex !== 'drag');
+    return [
+      {
+        title: t('layer.order'),
+        width: 84,
+        render: (_: unknown, record: Layer) => {
+          if (record.type !== 'countertop' && record.type !== 'shelf') return null;
+          return (
+            <div style={{ display: 'flex', gap: 2 }} onClick={(e) => e.stopPropagation()}>
+              <Tooltip content={t('layer.moveUp')} position="top">
+                <Button size="small" theme="borderless" icon={<IconChevronUp size="small" />} onClick={() => onMoveLayer(record.id, -1)} />
+              </Tooltip>
+              <Tooltip content={t('layer.moveDown')} position="top">
+                <Button size="small" theme="borderless" icon={<IconChevronDown size="small" />} onClick={() => onMoveLayer(record.id, 1)} />
+              </Tooltip>
+            </div>
+          );
+        },
+      },
+      ...rest,
+    ] as unknown as ColumnProps<Data>[];
+  }, [layers, compact, onMoveLayer, t]);
 
   const dataSource = useMemo(
     () => layers.map((layer) => ({ ...layer, key: layer.id })),

@@ -16,6 +16,9 @@ RUN npm run build
 FROM nginx:1.27-alpine
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=builder /app/dist /usr/share/nginx/html
+# 构建上下文里若存在 0600 的文件（不同 umask、手工创建），Vite 会原样复制权限到 dist，
+# nginx worker（nginx 用户）读不到 → 该资源 403。这里统一放开读权限，避免这类"本地能跑、部署 403"。
+RUN chmod -R a+rX /usr/share/nginx/html
 
 EXPOSE 80
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \

@@ -4,7 +4,17 @@ import * as React from 'react';
 import { ItemModel } from './ItemModel';
 
 export type { ItemType, ItemInfo, ItemCategory, Item3DProps } from './types';
-export { ITEM_REGISTRY, ITEM_MAP, ITEMS_BY_CATEGORY, CATEGORY_NAMES } from './types';
+export {
+  ITEM_REGISTRY,
+  ITEM_MAP,
+  ITEMS_BY_CATEGORY,
+  CATEGORY_NAMES,
+  CATEGORY_NAMES_EN,
+  itemName,
+  itemDescription,
+  categoryName,
+  itemNameByName,
+} from './types';
 
 /** 单类型物品组件工厂（绑定类型，渲染共享几何描述） */
 function makeItemComponent(type: ItemType): React.FC<Item3DProps> {
@@ -29,4 +39,9 @@ export const ITEM_COMPONENTS: Record<ItemType, React.FC<Item3DProps>> = {
   'power-strip': makeItemComponent('power-strip'),
   printer: makeItemComponent('printer'),
   'product-box': makeItemComponent('product-box'),
+  monitor: makeItemComponent('monitor'),
+  keyboard: makeItemComponent('keyboard'),
+  'ethernet-switch': makeItemComponent('ethernet-switch'),
+  ups: makeItemComponent('ups'),
+  'drawer-unit': makeItemComponent('drawer-unit'),
 };

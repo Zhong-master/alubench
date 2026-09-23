@@ -1,7 +1,10 @@
-import { ITEM_REGISTRY } from '../components/items';
+import { ITEM_REGISTRY, itemName } from '../components/items/types';
 import type { AppState } from '../state';
-import { buildSceneGeometry } from '../geometry';
+import { buildSceneGeometry, shelfIndex } from '../geometry';
+import type { SceneGeometry } from '../geometry';
 import { getItemPrimitives } from '../geometry/itemModel';
+import type { Locale } from '../i18n';
+import { tFor } from '../i18n/labels';
 // 离线内嵌 three r128 构建（?raw 打包进 bundle），导出 HTML 断网/内网亦可打开
 import threeRaw from '../export/vendor/three-r128.min.js?raw';
 import orbitRaw from '../export/vendor/OrbitControls-r128.js?raw';
@@ -21,12 +24,22 @@ const ITEM_COLORS: Record<string, string> = {
   'power-strip': '#e8e8e8',
   printer: '#e8e8e8',
   'product-box': '#a07030',
+  monitor: '#1c1e22',
+  keyboard: '#2a2a2a',
+  'ethernet-switch': '#3a4048',
+  ups: '#2b2f36',
+  'drawer-unit': '#5c636b',
 };
 
-export function generateExportHtml(state: AppState): string {
+export function generateExportHtml(
+  state: AppState,
+  geo: SceneGeometry = buildSceneGeometry(state),
+  locale: Locale = 'zh'
+): string {
+  const t = tFor(locale);
   const itemData = ITEM_REGISTRY.map((item) => ({
     type: item.type,
-    name: item.name,
+    name: itemName(item, locale),
     size: item.size,
     color: ITEM_COLORS[item.type] || '#888',
     category: item.category,
@@ -35,11 +48,10 @@ export function generateExportHtml(state: AppState): string {
   }));
 
   // 几何全部由共享内核计算，导出端只做渲染（根治与 3D 场景的漂移）
-  const geo = buildSceneGeometry(state);
   const shelfNumberFor = (layerId: string) => {
-    const shelves = state.layers.filter((l) => l.type === 'shelf');
-    const idx = shelves.findIndex((l) => l.id === layerId);
-    return idx >= 0 ? idx + 1 : 0;
+    const layer = state.layers.find((l) => l.id === layerId);
+    // 与底栏/3D 标签/右侧面板同一编号（按标高降序，与数组顺序无关）
+    return layer ? shelfIndex(layer, state.layers) : 0;
   };
 
   const data = {
@@ -87,14 +99,20 @@ export function generateExportHtml(state: AppState): string {
     })),
   };
 
-  const json = JSON.stringify(data);
+  // 内联进 <script> 前转义 < 与行分隔符：
+  // 工程文件里的 id / color / profileType 等是任意字符串，'</script>' 会提前闭合脚本块，
+  // U+2028/U+2029 在旧引擎中会被当作换行从而破坏脚本。
+  const json = JSON.stringify(data)
+    .replace(/</g, '\\u003c')
+    .replace(/\u2028/g, '\\u2028')
+    .replace(/\u2029/g, '\\u2029');
 
   return `<!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="${locale === 'en' ? 'en' : 'zh-CN'}">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>3D Workbench - 导出视图</title>
+<title>${t('doc.exportTitle')}</title>
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 html, body, #canvas { width: 100%; height: 100%; overflow: hidden; background: #2d2d2d; }
@@ -136,12 +154,12 @@ html, body, #canvas { width: 100%; height: 100%; overflow: hidden; background: #
 <body>
 <div id="canvas"></div>
 <button id="cube-btn"><canvas id="cube-canvas" width="72" height="72"></canvas></button>
-<button id="label-btn">标</button>
+<button id="label-btn">${t('doc.exportMarker')}</button>
 <div id="label-menu">
-  <label><input type="checkbox" id="chk-dims" checked> 尺寸标识</label>
-  <label><input type="checkbox" id="chk-ids" checked> 层ID标识</label>
+  <label><input type="checkbox" id="chk-dims" checked> ${t('doc.exportDims')}</label>
+  <label><input type="checkbox" id="chk-ids" checked> ${t('doc.exportIds')}</label>
 </div>
-<div id="info">鼠标拖拽旋转 · 滚轮缩放 · 右键平移</div>
+<div id="info">${t('doc.exportHint')}</div>
 
 <script>${threeRaw}</script>
 <script>${orbitRaw}</script>

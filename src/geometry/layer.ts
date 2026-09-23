@@ -1,4 +1,4 @@
-import type { Layer } from '../components/LeftPanel';
+import type { Layer } from '../components/layerTypes';
 import type { BeamInstance, BoardInstance, FrameContext, LayerGeometry } from './types';
 import { layerMM, layerSpec } from './context';
 
@@ -9,14 +9,59 @@ export function zOffsetOf(layer: Layer, Dmm: number): number {
   return halign === 'left' ? 0 : halign === 'right' ? Dmm - lz : (Dmm - lz) / 2;
 }
 
+/**
+ * 隔板序号（1-based，按标高降序；非隔板返回 0）。
+ *
+ * 底栏、3D 标签、右侧面板、导出 HTML 的「#N」必须共用这一个编号 ——
+ * 数组顺序不参与计算（BOM 传插入顺序、UI 传标高降序，否则同一场景会得到两套编号）。
+ */
+export function shelfIndex(layer: Layer, layers: Layer[]): number {
+  if (layer.type !== 'shelf') return 0;
+  const shelves = layers
+    .filter((l) => l.type === 'shelf')
+    .slice()
+    .sort((a, b) => b.detail.elevation - a.detail.elevation);
+  const idx = shelves.findIndex((l) => l.id === layer.id);
+  return idx >= 0 ? idx + 1 : 0;
+}
+
 /** 层板名称（BOM / 标签） */
 export function boardLabel(layer: Layer, layers: Layer[]): string {
   if (layer.type === 'top') return '顶板';
   if (layer.type === 'countertop') return '台面';
   if (layer.type === 'bottom') return '底板';
-  const shelves = layers.filter((l) => l.type === 'shelf');
-  const idx = shelves.findIndex((l) => l.id === layer.id);
-  return `隔板 #${idx + 1}`;
+  return `隔板 #${shelfIndex(layer, layers)}`;
+}
+
+/** 可参与层间连接的层类型（顶板只可能在当前层上方，底板只可能在下方） */
+const ABOVE_TYPES: ReadonlyArray<Layer['type']> = ['countertop', 'shelf', 'top'];
+const BELOW_TYPES: ReadonlyArray<Layer['type']> = ['countertop', 'shelf', 'bottom'];
+
+/**
+ * 取当前层「上方最近」的可连接层：标高大于 ly 的层中最低者。
+ *
+ * 只按标高比较，不依赖 layers 数组顺序 —— SceneView / 导出端传入的是标高降序
+ * （sortedLayers），BOM 传入的是原始插入顺序，两者必须得到同一结果。
+ */
+export function nearestLayerAbove(allLayers: Layer[], lyMM: number, selfId: string): Layer | null {
+  let best: Layer | null = null;
+  for (const l of allLayers) {
+    if (l.id === selfId || !ABOVE_TYPES.includes(l.type)) continue;
+    if (l.detail.elevation <= lyMM) continue;
+    if (!best || l.detail.elevation < best.detail.elevation) best = l;
+  }
+  return best;
+}
+
+/** 取当前层「下方最近」的可连接层：标高小于 ly 的层中最高者（同样与数组顺序无关） */
+export function nearestLayerBelow(allLayers: Layer[], lyMM: number, selfId: string): Layer | null {
+  let best: Layer | null = null;
+  for (const l of allLayers) {
+    if (l.id === selfId || !BELOW_TYPES.includes(l.type)) continue;
+    if (l.detail.elevation >= lyMM) continue;
+    if (!best || l.detail.elevation > best.detail.elevation) best = l;
+  }
+  return best;
 }
 
 /**
@@ -84,10 +129,7 @@ export function buildLayerGeometry(
 
   // ── 上连型材（up / drop）—— 竖柱连接到上层型材而非层面 ──
   if (hasFrame && (layer.detail.frontConnect === 'up' || layer.detail.frontConnect === 'drop')) {
-    const above = allLayers.find((l) => {
-      const le = l.detail.elevation / 1000;
-      return le > ly + 0.001 && (l.type === 'countertop' || l.type === 'shelf' || l.type === 'top');
-    });
+    const above = nearestLayerAbove(allLayers, layer.detail.elevation, layer.id);
     if (above) {
       const aly = above.detail.elevation / 1000;
       const alt = above.detail.thickness / 1000;
@@ -119,10 +161,7 @@ export function buildLayerGeometry(
 
   // ── 下连型材（down）—— 竖柱向下连接到下层型材 ──
   if (hasFrame && layer.detail.frontConnect === 'down') {
-    const below = [...allLayers].reverse().find((l) => {
-      const le = l.detail.elevation / 1000;
-      return le < ly - 0.001 && (l.type === 'countertop' || l.type === 'shelf' || l.type === 'bottom');
-    });
+    const below = nearestLayerBelow(allLayers, layer.detail.elevation, layer.id);
     if (below) {
       const bly = below.detail.elevation / 1000;
       const blt = below.detail.thickness / 1000;

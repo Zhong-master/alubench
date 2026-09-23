@@ -1,5 +1,5 @@
 import type { AppState } from '../state';
-import type { Layer } from '../components/LeftPanel';
+import type { Layer } from '../components/layerTypes';
 import type { Face, FrameContext } from './types';
 
 /** 解析型材规格字符串中的截面边长（mm），如 'GB-4040' → 40；解析失败返回 0 */

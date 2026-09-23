@@ -1,14 +1,17 @@
 import React, { useCallback, useState } from 'react';
 import { Button, Tooltip } from '@douyinfe/semi-ui';
 import { IconEyeOpened, IconMaximize } from '@douyinfe/semi-icons';
+import { useT } from '../i18n';
+import type { MessageKey } from '../i18n/messages';
 
-const BG_COLORS = [
-  { label: '浅灰', value: '#e8e8e8' },
-  { label: '深灰', value: '#2d2d2d' },
-  { label: '黑色', value: '#111111' },
+const BG_COLORS: { labelKey: MessageKey; value: string }[] = [
+  { labelKey: 'bg.lightGray', value: '#e8e8e8' },
+  { labelKey: 'bg.darkGray', value: '#2d2d2d' },
+  { labelKey: 'bg.black', value: '#111111' },
 ];
 
 const PresetViewButtons: React.FC = () => {
+  const t = useT();
   const [pinned, setPinned] = useState(true);
   const [hover, setHover] = useState(false);
   const [showColors, setShowColors] = useState(false);
@@ -89,13 +92,13 @@ const PresetViewButtons: React.FC = () => {
           position: 'relative',
         }}
       >
-        <Tooltip content="恢复初始视角">
+        <Tooltip content={t('tip.resetView')}>
           <Button theme="solid" type="primary" icon={<IconEyeOpened size="small" />} onClick={handleReset} style={btnStyle} />
         </Tooltip>
-        <Tooltip content="全屏查看">
+        <Tooltip content={t('tip.fullscreen')}>
           <Button theme="solid" type="primary" icon={<IconMaximize size="small" />} onClick={handleFullscreen} style={btnStyle} />
         </Tooltip>
-        <Tooltip content="背景颜色">
+        <Tooltip content={t('tip.background')}>
           <Button
             theme="solid"
             type="primary"
@@ -123,7 +126,7 @@ const PresetViewButtons: React.FC = () => {
             }}
           >
             {BG_COLORS.map((c) => (
-              <Tooltip key={c.value} content={c.label}>
+              <Tooltip key={c.value} content={t(c.labelKey)}>
                 <div
                   onClick={() => handleColorSelect(c.value)}
                   style={{
@@ -142,14 +145,14 @@ const PresetViewButtons: React.FC = () => {
             ))}
           </div>
         )}
-        <Tooltip content="标识开关">
+        <Tooltip content={t('tip.markerToggle')}>
           <Button
             theme="solid"
             type="primary"
             onClick={() => setShowLabels(!showLabels)}
             style={{ ...btnStyle, fontWeight: 600, fontSize: 11 }}
           >
-            标
+            {t('marker.short')}
           </Button>
         </Tooltip>
         {showLabels && (
@@ -173,22 +176,22 @@ const PresetViewButtons: React.FC = () => {
           >
             <label style={{ fontSize: 12, color: '#ccc', display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
               <input type="checkbox" checked={showDims} onChange={toggleDim} />
-              尺寸标识
+              {t('marker.dims')}
             </label>
             <label style={{ fontSize: 12, color: '#ccc', display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
               <input type="checkbox" checked={showShelfIds} onChange={toggleShelfId} />
-              层ID标识
+              {t('marker.layerIds')}
             </label>
           </div>
         )}
-        <Tooltip content={pinned ? '点击自动隐藏' : '点击固定显示'}>
+        <Tooltip content={pinned ? t('tip.pinnedHide') : t('tip.pinnedShow')}>
           <Button
             theme="borderless"
             size="small"
             onClick={() => setPinned(!pinned)}
             style={{ color: 'rgba(255,255,255,0.6)', padding: '0 4px', minWidth: 24, fontSize: 11 }}
           >
-            {pinned ? '固定' : '自动'}
+            {pinned ? t('marker.pinned') : t('marker.auto')}
           </Button>
         </Tooltip>
       </div>

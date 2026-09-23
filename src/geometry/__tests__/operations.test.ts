@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseLayout, remapPlacedItems, duplicateLayer } from '../operations';
+import { parseLayout, remapPlacedItems, duplicateLayer, swapLayerElevations, isOrderableLayer } from '../operations';
 import { makeLayer } from './helpers';
 
 describe('parseLayout', () => {
@@ -87,5 +87,49 @@ describe('duplicateLayer — 复制层', () => {
   it('物品数组逐项拷贝，不共享 PlacedItem 引用', () => {
     const copy = duplicateLayer(base);
     expect(copy.detail.placedItems[0]).not.toBe(base.detail.placedItems[0]);
+  });
+});
+
+describe('swapLayerElevations — 拖拽排序', () => {
+  const shelfA = makeLayer({ id: 'shelf-a', type: 'shelf', elevation: 550 });
+  const shelfB = makeLayer({ id: 'shelf-b', type: 'shelf', elevation: 1150 });
+  const top = makeLayer({ id: 'top', type: 'top', elevation: 1600 });
+  const bottom = makeLayer({ id: 'bottom', type: 'bottom', elevation: 40 });
+  const layers = [top, shelfB, shelfA, bottom];
+
+  it('交换两个隔板标高', () => {
+    const next = swapLayerElevations(layers, 'shelf-a', 'shelf-b');
+    expect(next.find((l) => l.id === 'shelf-a')!.detail.elevation).toBe(1150);
+    expect(next.find((l) => l.id === 'shelf-b')!.detail.elevation).toBe(550);
+    expect(next).not.toBe(layers);
+  });
+
+  it('不原地修改入参（撤销栈历史项不被污染）', () => {
+    const snapshot = layers.map((l) => l.detail.elevation);
+    swapLayerElevations(layers, 'shelf-a', 'shelf-b');
+    expect(layers.map((l) => l.detail.elevation)).toEqual(snapshot);
+    expect(shelfA.detail.elevation).toBe(550);
+    expect(shelfB.detail.elevation).toBe(1150);
+  });
+
+  it('未参与交换的层保持同一引用（避免无谓重渲染）', () => {
+    const next = swapLayerElevations(layers, 'shelf-a', 'shelf-b');
+    expect(next.find((l) => l.id === 'top')).toBe(top);
+    expect(next.find((l) => l.id === 'bottom')).toBe(bottom);
+  });
+
+  it('顶板/底板不可排序：原样返回同一引用', () => {
+    expect(swapLayerElevations(layers, 'top', 'shelf-a')).toBe(layers);
+    expect(swapLayerElevations(layers, 'shelf-a', 'bottom')).toBe(layers);
+    expect(isOrderableLayer(top)).toBe(false);
+    expect(isOrderableLayer(bottom)).toBe(false);
+    expect(isOrderableLayer(shelfA)).toBe(true);
+  });
+
+  it('同层/未知 id/标高相同 → 原样返回', () => {
+    expect(swapLayerElevations(layers, 'shelf-a', 'shelf-a')).toBe(layers);
+    expect(swapLayerElevations(layers, 'shelf-a', 'nope')).toBe(layers);
+    const twin = [shelfA, makeLayer({ id: 'shelf-c', type: 'shelf', elevation: 550 })];
+    expect(swapLayerElevations(twin, 'shelf-a', 'shelf-c')).toBe(twin);
   });
 });

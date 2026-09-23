@@ -7,14 +7,14 @@ import type { Layer } from './LeftPanel';
 import type { ItemType } from './items';
 import { ITEM_COMPONENTS, ITEM_MAP } from './items';
 import type { OrbitControlsLike } from './threeTypes';
-import type { ColumnsState } from '../state';
-import { buildSceneGeometry } from '../geometry';
+import type { SceneGeometry } from '../geometry';
 
 interface SceneProps {
   dimensions: { width: number; depth: number; height: number };
   profile: string[];
-  columns: ColumnsState;
   layers: Layer[];
+  /** 共享几何内核实例（由 App 统一计算一次，BOM/校验/3D 共用，勿在本组件重算） */
+  geometry: SceneGeometry;
   selectedLayerId?: string | null;
   selectedItemType?: ItemType | null;
   selectedPlacedItem?: { layerId: string; col: number; row: number } | null;
@@ -266,7 +266,7 @@ const Btn: React.FC<{ onClick: () => void; active?: boolean; style?: React.CSSPr
 );
 const Div: React.FC = () => <div style={{ width: 1, height: 26, background: '#e0e0e0', margin: '0 4px', flexShrink: 0 }} />;
 
-const SceneView: React.FC<SceneProps> = ({ dimensions, profile, columns, layers, selectedLayerId, selectedItemType, selectedPlacedItem, onPlaceItem, onSelectPlacedItem, onTransformPlacedItem }) => {
+const SceneView: React.FC<SceneProps> = ({ dimensions, profile, layers, geometry, selectedLayerId, selectedItemType, selectedPlacedItem, onPlaceItem, onSelectPlacedItem, onTransformPlacedItem }) => {
   const W = dimensions.width / 1000;
   const H = dimensions.height / 1000;
   const D = dimensions.depth / 1000;
@@ -282,10 +282,6 @@ const SceneView: React.FC<SceneProps> = ({ dimensions, profile, columns, layers,
   const shape = useMemo(() => makeProfileShape(t, profile), [t, profile]);
 
   // 共享几何内核：机架级型材 + 各层几何（板材/边框/连接/加强筋/物品占位）
-  const geometry = useMemo(
-    () => buildSceneGeometry({ dimensions, profile, columns, layers }),
-    [dimensions, profile, columns, layers]
-  );
   const beams = geometry.frameBeams;
   const layerGeom = useMemo(
     () => new Map(geometry.layers.map((lg) => [lg.layerId, lg] as const)),

@@ -1,7 +1,12 @@
 import type { AppState } from '../state';
-import { ITEM_MAP } from '../components/items';
-import type { Layer } from '../components/LeftPanel';
+import { ITEM_MAP, itemNameByName } from '../components/items/types';
+import { LAYER_CONFIG } from '../components/layerTypes';
+import type { Layer } from '../components/layerTypes';
 import { buildSceneGeometry } from './index';
+import type { SceneGeometry } from './types';
+import { nearestLayerAbove } from './layer';
+import type { Locale } from '../i18n';
+import { localizeLayerLabel, tFor } from '../i18n/labels';
 
 export interface ValidationIssue {
   severity: 'error' | 'warning';
@@ -24,25 +29,29 @@ function layerSpan(l: Layer): { bottom: number; top: number } {
  * - board-height-overflow：层板标高+厚度超出机架高度
  * - layer-collision：相邻两层板垂直区间重叠
  * - item-overflow：物品世界尺寸（考虑 90° 旋转后的包围盒）超出所在网格单元
+ * - item-clearance：物品顶部穿透上方最近层（或机架净高）
+ *
+ * UI 每次状态变更只需算一次几何，请用 `validateGeometry(state, geo)` 复用同一份实例；
+ * `validate(state)` 是自建几何的独立入口（单测 / 脚本用）。
  */
-export function validate(state: AppState): ValidationIssue[] {
+export function validateGeometry(state: AppState, geo: SceneGeometry, locale: Locale = 'zh'): ValidationIssue[] {
+  const t = tFor(locale);
   const issues: ValidationIssue[] = [];
   const { width: W, depth: D, height: H } = state.dimensions;
-  const geo = buildSceneGeometry(state);
 
   // ── 层板越界 / 高度 ──
   for (const lg of geo.layers) {
     const b = lg.board;
     if (b.length > W + 1) {
-      issues.push({ severity: 'error', code: 'board-overflow', message: `「${b.label}」长度 ${b.length}mm 超出机架长 ${W}mm`, layerId: b.layerId });
+      issues.push({ severity: 'error', code: 'board-overflow', message: t('validate.boardLenOverflow', { label: localizeLayerLabel(b.label, t), len: b.length, max: W }), layerId: b.layerId });
     }
     if (b.width > D + 1) {
-      issues.push({ severity: 'error', code: 'board-overflow', message: `「${b.label}」宽度 ${b.width}mm 超出机架深 ${D}mm`, layerId: b.layerId });
+      issues.push({ severity: 'error', code: 'board-overflow', message: t('validate.boardWidthOverflow', { label: localizeLayerLabel(b.label, t), len: b.width, max: D }), layerId: b.layerId });
     }
     const top = b.pos[1] + b.size[1] / 2;
     // 允许标高等同机架高（顶板顶面贴顶）；仅当顶面超出机架高一个板厚以上判为越界
     if (top > (H + b.thickness) / 1000 + 0.001) {
-      issues.push({ severity: 'error', code: 'board-height-overflow', message: `「${b.label}」标高+厚度超出机架高度 ${H}mm`, layerId: b.layerId });
+      issues.push({ severity: 'error', code: 'board-height-overflow', message: t('validate.boardHeightOverflow', { label: localizeLayerLabel(b.label, t), max: H }), layerId: b.layerId });
     }
   }
 
@@ -57,7 +66,7 @@ export function validate(state: AppState): ValidationIssue[] {
       issues.push({
         severity: 'warning',
         code: 'layer-collision',
-        message: `「${a.label}」与「${b.label}」层板在标高 ${bSpan.bottom.toFixed(0)}mm 处重叠`,
+        message: t('validate.overlap', { a: localizeLayerLabel(a.label, t), b: localizeLayerLabel(b.label, t), z: bSpan.bottom.toFixed(0) }),
         layerId: a.id,
       });
     }
@@ -88,12 +97,52 @@ export function validate(state: AppState): ValidationIssue[] {
         issues.push({
           severity: 'warning',
           code: 'item-overflow',
-          message: `「${name}」超出所在网格单元（缩放 ${p.scale.toFixed(2)}×）`,
+          message: t('validate.itemOutOfCell', { name: itemNameByName(name, locale), scale: p.scale.toFixed(2) }),
           layerId: lg.layerId,
         });
       }
     }
   }
 
+  // ── 物品顶部与上方最近层的净空 ──
+  // 只按网格单元做水平校验会漏掉「高物品穿透上层板」这类物理干涉，
+  // 每个层最多报告一次（取穿透最深者），避免同一层刷屏。
+  // 上方无层时不做校验（机架顶板之上是开放空间，物品可以高出机架）。
+  const CLEARANCE_TOLERANCE = 5; // mm，小于此值视为建模误差，不报
+  for (const layer of state.layers) {
+    const lg = geo.layers.find((g) => g.layerId === layer.id);
+    if (!lg || lg.placements.length === 0) continue;
+    const above = nearestLayerAbove(state.layers, layer.detail.elevation, layer.id);
+    if (!above) continue;
+    const ceilingY = above.detail.elevation - above.detail.thickness / 2;
+    const ceilingLabel = above.label || LAYER_CONFIG[above.type].label;
+    let worst: { name: string; over: number } | null = null;
+    for (const p of lg.placements) {
+      // p.y 是物品中心，顶部 = 中心 + 高/2
+      const itemTop = (p.y + p.worldSize[2] / 2) * 1000;
+      const over = itemTop - ceilingY;
+      if (over > CLEARANCE_TOLERANCE && (!worst || over > worst.over)) {
+        worst = { name: ITEM_MAP.get(p.itemType)?.name || p.itemType, over };
+      }
+    }
+    if (worst) {
+      issues.push({
+        severity: 'warning',
+        code: 'item-clearance',
+        message: t('validate.itemClearance', {
+          name: itemNameByName(worst.name, locale),
+          ceiling: localizeLayerLabel(ceilingLabel, t),
+          over: Math.round(worst.over),
+        }),
+        layerId: layer.id,
+      });
+    }
+  }
+
   return issues;
+}
+
+/** 自建几何的独立入口（单测 / 脚本用）；UI 请复用一份几何后调用 `validateGeometry` */
+export function validate(state: AppState, locale: Locale = 'zh'): ValidationIssue[] {
+  return validateGeometry(state, buildSceneGeometry(state), locale);
 }

@@ -1,5 +1,5 @@
-import type { LayerType } from '../components/LeftPanel';
-import type { ItemType } from '../components/items';
+import type { LayerType } from '../components/layerTypes';
+import type { ItemType } from '../components/items/types';
 
 /**
  * 共享几何内核 — 统一的数据类型

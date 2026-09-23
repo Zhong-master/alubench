@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { DEFAULT_STATE } from '../../state';
-import { computeBom } from '../../utils/bom';
+import { computeBom, computeBomFromGeometry } from '../../utils/bom';
+import { buildSceneGeometry } from '../index';
 import { makeFourLayerScene } from './helpers';
 
 describe('computeBom — 共享几何内核 BOM 聚合', () => {
@@ -53,5 +54,15 @@ describe('computeBom — 共享几何内核 BOM 聚合', () => {
     const shelfBorder = bom.profiles.filter((p) => p.spec === 'GB-3030');
     // 隔板 4 边框：2×1560 + 2×820(850-30)
     expect(shelfBorder.reduce((s, p) => s + p.count, 0)).toBe(4);
+  });
+
+  it('computeBomFromGeometry（UI 复用一份几何）与 computeBom 结果一致', () => {
+    const state = { ...DEFAULT_STATE, layers: Object.values(makeFourLayerScene()) };
+    const geo = buildSceneGeometry(state);
+    expect(computeBomFromGeometry(geo)).toEqual(computeBom(state));
+    // 板材顺序跟随传入的几何（UI 传标高降序 → 清单也是标高降序）
+    expect(computeBomFromGeometry(geo).boards.map((b) => b.label)).toEqual([
+      '顶板', '台面', '隔板 #1', '底板',
+    ]);
   });
 });

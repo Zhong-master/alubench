@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { DEFAULT_STATE } from '../../state';
-import { buildSceneGeometry } from '../index';
+import { buildSceneGeometry, boardLabel, shelfIndex } from '../index';
 import { computeBom } from '../../utils/bom';
 import { makeLayer, makeFourLayerScene } from './helpers';
 
@@ -58,22 +58,69 @@ describe('buildFrameBeams — 机架级型材（复杂连接/立杆截断）', (
 });
 
 describe('buildLayerGeometry — 层板连接与加强筋', () => {
-  it('frontConnect=up：层间生成连接竖柱', () => {
+  it('frontConnect=up：连到上方最近一层（台面 800），不跨层直插顶板', () => {
     const layers = makeFourLayerScene();
-    // 隔板(550) up 连到台面(800)，非全宽触发
+    // 隔板(550) up 应连到台面(800)，而非顶板(1600)
     layers.shelf.detail.frontConnect = 'up';
     layers.shelf.detail.width = 600;
     const geo = buildSceneGeometry(stateWith(layers));
     const shelfGeom = geo.layers.find((l) => l.layerId === 'shelf1')!;
-    // 竖柱 dropH = (800 - 5 - 5) - (550 + 5) = 235；实测内核输出 1050 是
-    // 隔板默认 1600×850 全宽层，frontConnect=up 且非全宽才生成 235。锁定实际值
+    // dropTop = 台面标高 800 - 台面厚/2 5 - 台面型材 40 = 755
+    // dropBot = 隔板标高 550 - 隔板厚/2 5 = 545 → dropH = 210
     const uprights = shelfGeom.beams.filter((b) => b.size[1] > b.size[0]);
     expect(uprights.length).toBe(4);
-    // 内核输出 1050：dropH 取 (台面底 795) - (550+5)=240 → 但实测 1050，
-    // 说明连接目标是「上层之上」——锁定实际输出
     for (const u of uprights) {
-      expect(u.length).toBe(1050);
+      expect(u.length).toBe(210);
     }
+  });
+
+  it('frontConnect=up：中间隔板跳过多层，只看最近的上层', () => {
+    // 顶板1600 / 隔板3 1450 / 隔板2 1150 / 台面800 / 隔板1 550 / 底板40
+    const layers = {
+      ...makeFourLayerScene(),
+      shelf2: makeLayer({ id: 'shelf2', type: 'shelf', elevation: 1150 }),
+      shelf3: makeLayer({ id: 'shelf3', type: 'shelf', elevation: 1450 }),
+    };
+    layers.shelf.detail.frontConnect = 'up';
+    layers.shelf.detail.width = 600;
+    const geo = buildSceneGeometry(stateWith(layers));
+    const shelf1 = geo.layers.find((l) => l.layerId === 'shelf1')!;
+    // 隔板1(550) 之上最近的是台面(800) → 210，而不是隔板2(1150)
+    const up1 = shelf1.beams.filter((b) => b.size[1] > b.size[0]);
+    expect(up1.every((b) => b.length === 210)).toBe(true);
+  });
+
+  it('frontConnect=down：连到下方最近一层（中间隔板对中间隔板）', () => {
+    const layers = {
+      ...makeFourLayerScene(),
+      shelf2: makeLayer({ id: 'shelf2', type: 'shelf', elevation: 1150 }),
+    };
+    layers.shelf2.detail.frontConnect = 'down';
+    layers.shelf2.detail.width = 600;
+    const geo = buildSceneGeometry(stateWith(layers));
+    const shelf2 = geo.layers.find((l) => l.layerId === 'shelf2')!;
+    // 隔板2(1150) 之下最近的是台面(800)：dropBot = 800 + 5 + 40(台面型材) = 845
+    // dropTop = 1150 - 5 = 1145 → dropH = 300（而非跨到底板）
+    const uprights = shelf2.beams.filter((b) => b.size[1] > b.size[0]);
+    expect(uprights.length).toBeGreaterThan(0);
+    expect(uprights.every((b) => b.length === 300)).toBe(true);
+  });
+
+  it('层间连接与传入数组顺序无关（3D 降序 / BOM 插入顺序结果一致）', () => {
+    const layers = makeFourLayerScene();
+    layers.shelf.detail.frontConnect = 'up';
+    layers.shelf.detail.width = 600;
+    const values = Object.values(layers);
+    const ascending = [...values].sort((a, b) => a.detail.elevation - b.detail.elevation);
+    const descending = [...values].sort((a, b) => b.detail.elevation - a.detail.elevation);
+    const uprightLengths = (ls: typeof values) =>
+      buildSceneGeometry({ ...DEFAULT_STATE, layers: ls })
+        .layers.find((l) => l.layerId === 'shelf1')!
+        .beams.filter((b) => b.size[1] > b.size[0])
+        .map((b) => b.length)
+        .sort((a, b) => a - b);
+    expect(uprightLengths(ascending)).toEqual(uprightLengths(descending));
+    expect(uprightLengths(descending)).toEqual([210, 210, 210, 210]);
   });
 
   it('frontConnect=down：向下连接到底板', () => {
@@ -82,11 +129,41 @@ describe('buildLayerGeometry — 层板连接与加强筋', () => {
     layers.shelf.detail.width = 600;
     const geo = buildSceneGeometry(stateWith(layers));
     const shelfGeom = geo.layers.find((l) => l.layerId === 'shelf1')!;
-    // 到底板(40) 顶 + 型材(20) = 65；dropTop = 550-5 = 545 → dropH = 480
-    // 实测内核输出 dropH=500（含半型材修正），锁定实际值
+    // 隔板1(550) 之下只有底板(40)：底板无边框，dropBot = 40 + 5 = 45
+    // dropTop = 550 - 5 = 545 → dropH = 500
     const uprights = shelfGeom.beams.filter((b) => b.size[1] > b.size[0]);
     const drop = uprights.find((b) => b.length === 500);
     expect(drop).toBeDefined();
+  });
+
+  it('boardLabel：隔板编号按标高降序，与数组顺序无关', () => {
+    const layers = makeFourLayerScene();
+    const shuffled = [layers.shelf, layers.bottom, layers.top, layers.countertop];
+    expect(boardLabel(layers.shelf, shuffled)).toBe('隔板 #1');
+    const withTwo = {
+      ...layers,
+      shelf2: makeLayer({ id: 'shelf2', type: 'shelf', elevation: 1150 }),
+    };
+    const list = Object.values(withTwo);
+    expect(boardLabel(withTwo.shelf2, list)).toBe('隔板 #1'); // 标高最高
+    expect(boardLabel(withTwo.shelf, [...list].reverse())).toBe('隔板 #2');
+  });
+
+  it('shelfIndex：与 boardLabel 同源（导出/右侧面板/底栏共用一处编号）', () => {
+    const layers = makeFourLayerScene();
+    const withTwo = {
+      ...layers,
+      shelf2: makeLayer({ id: 'shelf2', type: 'shelf', elevation: 1150 }),
+    };
+    const list = Object.values(withTwo);
+    expect(shelfIndex(withTwo.shelf2, list)).toBe(1);
+    expect(shelfIndex(withTwo.shelf, list)).toBe(2);
+    // 非隔板返回 0（调用方据此决定是否显示 #N）
+    expect(shelfIndex(withTwo.top, list)).toBe(0);
+    // 与 boardLabel 编号一致
+    for (const l of [withTwo.shelf, withTwo.shelf2]) {
+      expect(boardLabel(l, list)).toBe(`隔板 #${shelfIndex(l, list)}`);
+    }
   });
 
   it('加强筋：ribCount=3 横向生成 3 根', () => {
@@ -106,6 +183,23 @@ describe('buildLayerGeometry — 层板连接与加强筋', () => {
     const shelfGeom = geo.layers.find((l) => l.layerId === 'shelf1')!;
     const beams = shelfGeom.beams;
     expect(beams.some((b) => b.length === 1570)).toBe(true); // 1600-30
+  });
+
+  it('层板自定义 profileType：截面尺寸与 BOM 规格同步跟随，清空后回落机架规格', () => {
+    const layers = makeFourLayerScene();
+    layers.shelf.detail.profileType = 'GB-3030';
+    const geo = buildSceneGeometry(stateWith(layers));
+    const border = geo.layers.find((l) => l.layerId === 'shelf1')!.beams.find((b) => b.length === 1570)!;
+    expect(border.spec).toBe('GB-3030');
+    expect(border.size[1]).toBeCloseTo(0.03, 6); // 边框截面 30mm（非机架 40mm）
+
+    // 清空（UI 选「跟随机架」）→ 回到 GB-4040 / 40mm / 1560
+    layers.shelf.detail.profileType = '';
+    const geo2 = buildSceneGeometry(stateWith(layers));
+    const beams2 = geo2.layers.find((l) => l.layerId === 'shelf1')!.beams;
+    const border2 = beams2.find((b) => b.length === 1560)!;
+    expect(border2.spec).toBe('GB-4040');
+    expect(border2.size[1]).toBeCloseTo(0.04, 6);
   });
 });
 

@@ -1,4 +1,4 @@
-import type { Layer, PlacedItem } from '../components/LeftPanel';
+import type { Layer, PlacedItem } from '../components/layerTypes';
 
 /** 解析布局字符串 '3X2' → [3, 2]；无效返回 null */
 export function parseLayout(layout: string): [number, number] | null {
@@ -44,11 +44,40 @@ export function duplicateLayer(layer: Layer): Layer {
       ...layer.detail,
       elevation: layer.detail.elevation + 10,
       placedItems: layer.detail.placedItems.map((p) => ({ ...p })),
-      items: [...layer.detail.items],
       topColumns: layer.detail.topColumns
         ? { ...layer.detail.topColumns }
         : { fl: true, fr: true, bl: true, br: true },
     },
   };
   return copy;
+}
+
+/** 可参与拖拽排序的层类型（顶板/底板位置固定，不参与排序） */
+export function isOrderableLayer(layer: Layer): boolean {
+  return layer.type === 'countertop' || layer.type === 'shelf';
+}
+
+/**
+ * 拖拽排序：交换两个可排序层的标高（数组位置不变，显示顺序由标高决定）。
+ *
+ * 纯函数 —— 不修改入参。此前的实现直接在 updater 内给 `prev` 里的层对象赋值
+ * （`moved.detail.elevation = ...`），而 `prev` 与撤销栈中的历史项是同一批对象，
+ * 导致「拖拽一次后撤销无法恢复原状」。
+ *
+ * 不可排序 / id 不存在 / 同一层 / 标高相同 → 原样返回同一引用，
+ * 调用方（App.updateLayers）据此跳过状态写入，不产生空的撤销步骤。
+ */
+export function swapLayerElevations(layers: Layer[], activeId: string, targetId: string): Layer[] {
+  if (!activeId || !targetId || activeId === targetId) return layers;
+  const active = layers.find((l) => l.id === activeId);
+  const target = layers.find((l) => l.id === targetId);
+  if (!active || !target || !isOrderableLayer(active) || !isOrderableLayer(target)) return layers;
+  const activeElev = active.detail.elevation;
+  const targetElev = target.detail.elevation;
+  if (activeElev === targetElev) return layers;
+  return layers.map((l) => {
+    if (l.id === activeId) return { ...l, detail: { ...l.detail, elevation: targetElev } };
+    if (l.id === targetId) return { ...l, detail: { ...l.detail, elevation: activeElev } };
+    return l;
+  });
 }
