@@ -979,7 +979,11 @@ const App: React.FC = () => {
               </Tooltip>
             </div>
             <div style={{ height: 'calc(100% - 44px)', overflow: 'auto' }}>
+              {/* ⚠️ key={locale} 是必需的：Semi 的 Select 会缓存挂载时的选项/占位文案，
+                  运行时切语言不会重算（实测 zh→en 后「全高 / 全框连接 / 国标 (GB)」仍是中文），
+                  换 key 强制重挂载才能跟上语言。 */}
               <LeftPanel
+                key={locale}
                 layers={sortedLayers}
                 onLayersChange={updateLayers}
                 dimensions={appState.dimensions}
@@ -1070,6 +1074,7 @@ const App: React.FC = () => {
               <div style={{ flex: 1, overflow: 'auto' }}>
                 {rightTab === 'properties' ? (
                   <LayerEditor
+                    key={locale}
                     layer={appState.layers.find((l) => l.id === selectedLayerId) || null}
                     shelfNumber={(() => {
                       // 与底栏/3D 标签/导出共用内核同一编号
@@ -1254,6 +1259,7 @@ const App: React.FC = () => {
             {/* 层表格 */}
             <div style={{ flex: 1, overflow: 'auto', padding: '4px 8px' }}>
               <BottomBarTable
+                key={locale}
                 layers={sortedLayers}
                 selectedId={selectedLayerId}
                 onSelect={(id) => { setSelectedLayerId(id); setRightTab('properties'); if (id) setRightCollapsed(false); }}
