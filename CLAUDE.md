@@ -39,6 +39,8 @@ docker compose up -d   # 部署到本机 :5173
 **⚠️ 静态文件权限会带进镜像**：Vite 把 `public/*` 按原权限复制进 `dist/`。若文件是 0600（某些工具创建的文件就是），nginx worker 读不到 → 该资源 403（本机实测 `sw.js`/清单 403，PWA 全废）。`Dockerfile` 已有 `RUN chmod -R a+rX` 兜底，新增 public 文件后仍建议 `ls -l` 看一眼。
 **部署验证（已实测，别再只读文档）**：`docker compose config` → `docker compose build` → `docker compose up -d` → `docker compose ps` 应为 `healthy`（容器内有 HEALTHCHECK）；随后**务必用浏览器加载容器地址验证生产构建产物**（dev server 与生产构建不同：导出模块是独立 655 KB 按需 chunk，首屏包也只有生产构建才走真实分包）。镜像约 77 MB，`docker compose down` 后镜像保留。
 
+**npm 分发（`bin/cli.mjs`）**：包内自带 `dist/`，`npx visionai-3dworkbench` 即可起服务，使用者不需要 Node 构建工具链。三条必须守住的约定：① **CLI 行为必须与 `nginx.conf` 一致**（SPA 回退、`/assets/` 缺失=404、`.webmanifest` MIME、缓存头、gzip）——改一边就要改另一边，否则"本地跑得好、上线不一样"；② **react/three/semi 等只能放 `devDependencies`**，放回 `dependencies` 会让 `npx` 连带装 100+ 个包（实测 147 个 → 1 个）；③ `files` 只含 `bin/ dist/ README LICENSE CHANGELOG`，源码不进包；`prepack` 负责刷新 `dist`、`prepublishOnly` 跑 `npm run check`。发布需维护者自己的 npm 账号，且 `LICENSE` 占位符必须先换成真实姓名（CC BY-NC-SA 4.0，非软件专用协议、限非商用）。
+
 **部署**：纯前端 SPA，无后端。`Dockerfile` 多阶段构建（builder: node:22-alpine 跑 `npm run build` → runner: nginx:1.27-alpine 托管 `dist/`）；`nginx.conf` 做 SPA 回退与缓存/gzip；`.dockerignore` 排除 `node_modules`/`dist`。**场景数据（工程文件/localStorage 草稿）都在浏览器端，容器无状态，重建/升级不丢数据。** 新增部署文件改动只涉及 Dockerfile / docker-compose.yml / nginx.conf / .dockerignore 四个文件，不进入 `src/`。
 
 **DOM 交互测试**：需要 DOM 的用例在文件首行声明 `// @vitest-environment jsdom`（默认环境仍是 node，几何内核测试跑得更快）。两条必须遵守的约定：① Semi 桶文件静态 import 的 `lottie-web` 在模块加载期就调用 `canvas.getContext('2d')`，jsdom 未实现 → 已在 `vite.config.ts` 的 `test.alias` 里指向 `src/test/lottie-stub.ts`（**不影响生产构建**）；② vitest 默认 `globals:false`，RTL 的自动卸载不生效，DOM 测试文件必须显式 `afterEach(cleanup)`，否则整个文件跑完进程不退出（表现为长时间无输出）。示例见 `src/components/__tests__/DeferredNumberInput.dom.test.tsx`。

@@ -6,6 +6,13 @@
 - **文档：一键部署可执行化 + 数字按实测校正**。README 新增「一键部署」（`docker compose up -d --build` 一条命令）与「没有 Docker？两种轻量方式」（dev server / `npx serve dist` + `file://` 不可用的原因）；修正 nginx 段过时的体积数字（实测主 JS 1.88 MB → 527 KB gzip、CSS 236 KB → 27 KB gzip；导出模块 655 KB 是按需 chunk）。
 - **验证：Docker 一键部署实跑通过**（此前只从文档"确认"）。`docker compose config` 校验 → `docker compose build`（exit 0，镜像 77.1 MB）→ `up -d` 后 `docker compose ps` 显示 **healthy**（容器 HEALTHCHECK 生效）→ 用浏览器加载**生产构建产物**（此前所有验证都跑在 dev server 上）实测：画布渲染 27 mesh、载入场景 47 mesh、BOM 弹窗文案正确、**采购链接 24 条**、板材合并文案正确、导出产出 `3d-workbench-export.html`（672,784 字节自包含 HTML，含内嵌 three r128）、新加的成功回执 Toast 生效、控制台零报错。验证后已 `docker compose down`（镜像保留，`docker compose up -d` 即可再起）。
 
+## [npm 一条命令装起来] 打包成 npm 包（零依赖 CLI）
+- **新增：可发布为 npm 包，`npx visionai-3dworkbench` 一条命令起服务**。包内自带已构建好的 `dist/`，使用者不需要 Docker、不需要本机构建工具链；`npm i -g` 后得到 `visionai-workbench` 命令，支持 `--port / --host / --open`。tarball 755 KB（解包 2.9 MB / 15 个文件，**不含源码**）。
+- **关键决定：把 react/three/semi 等全部从 `dependencies` 移到 `devDependencies`**。它们只在构建期用到，`dist` 里已经打包好了；实测放 `dependencies` 时安装会连带拉 **147 个包**，移走之后变成 **`added 1 package in 220ms`** —— 这是"一条命令安装"能不能成立的分界线。
+- **CLI 行为与 nginx.conf 逐条对齐**（避免"本地好好的、上线不一样"）：SPA 回退、`/assets/` 缺失返回 404（不能把 index.html 当 js 返回）、`.webmanifest` 发 `application/manifest+json`、`/assets/` 永久缓存、`/sw.js` 与清单 no-cache、gzip、目录穿越防护（`/%2e%2e/package.json` → 404）、非 GET/HEAD → 405。
+- **验证（实跑，不是只看文档）**：`npm pack` → `npm install -g --prefix /tmp/…` → **从 `/tmp` 启动**（证明不依赖仓库路径）：index/sw.js/清单状态码与 MIME 全部正确、SPA 深链回退 200、缺失资源 404、gzip 与缓存头与 nginx 一致；`npx --package <tgz> visionai-workbench` 同样跑通。名字 `visionai-3dworkbench` 在 npm 上未被占用（`npm view` → E404，registry 可达已复核）。
+- ⚠️ **发布前三件事**：① `LICENSE` 里版权占位符要换成真实姓名/公司；② `npm publish` 需要你自己的 npm 账号（我无法代发）；③ 协议是 CC BY-NC-SA 4.0 —— 非软件专用协议且限非商用，想被更广泛采用需要重新考虑授权（README 已写明）。
+
 ## [中英双语 + 物品库扩充] 面向国际用户与工作台常用件
 - **新增：中英文双语界面**（无第三方依赖）。文案表 `src/i18n/messages.ts` 以中文为准、英文声明为 `Record<MessageKey, string>`，**缺键即编译失败**；顶栏一键切换、按浏览器语言自动判断、选择持久化；Semi 组件自带文案（表格空态等）由 `LocaleProvider` 跟随。
 - **架构约定：语言只影响显示，不改数据**。几何内核产出的层板标签（`顶板 / 隔板 #N`）与 `自定义` 规格是**语言中立的数据**，会写进工程文件 / BOM / 导出快照；翻译只发生在显示最后一跳（`src/i18n/labels.ts`）。非 React 模块（校验 / CSV / HTML 报告 / 导出）走**显式 `locale` 参数，默认 `zh`** —— 既有调用与 106 条旧测试行为不变。

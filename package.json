@@ -1,7 +1,7 @@
 {
-  "name": "visionai_3dworkbench",
+  "name": "visionai-3dworkbench",
   "version": "1.0.0",
-  "description": "VisionAI 3D Workbench - 基于 Semi Design + Three.js 的 3D 场景编辑器",
+  "description": "铝型材工业工作台 3D 设计器（纯前端、离线可用）：搭骨架、放设备、导出 BOM 与采购清单 / Industrial aluminium-profile workbench 3D designer: frame builder, equipment placement, BOM export, offline-capable",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -9,22 +9,32 @@
     "preview": "vite preview",
     "lint": "eslint src",
     "test": "vitest run",
-    "check": "npm run lint && tsc --noEmit && vitest run && vite build"
+    "check": "npm run lint && tsc --noEmit && vitest run && vite build",
+    "start": "node bin/cli.mjs",
+    "prepack": "npm run build",
+    "prepublishOnly": "npm run check"
   },
-  "keywords": [],
+  "keywords": [
+    "铝型材",
+    "aluminium-extrusion",
+    "workbench",
+    "3d",
+    "threejs",
+    "react",
+    "bom",
+    "cad",
+    "industrial",
+    "offline",
+    "pwa"
+  ],
   "author": "",
   "license": "CC-BY-NC-SA-4.0",
-  "dependencies": {
+  "devDependencies": {
     "@douyinfe/semi-icons": "^2.99.3",
     "@douyinfe/semi-ui": "^2.99.3",
+    "@eslint/js": "^10.0.1",
     "@react-three/drei": "^10.7.7",
     "@react-three/fiber": "^9.6.1",
-    "react": "^19.2.7",
-    "react-dom": "^19.2.7",
-    "three": "^0.184.0"
-  },
-  "devDependencies": {
-    "@eslint/js": "^10.0.1",
     "@testing-library/react": "^16.3.3",
     "@testing-library/user-event": "^14.6.7",
     "@types/node": "^26.1.2",
@@ -36,9 +46,25 @@
     "eslint-plugin-react-hooks": "^7.1.1",
     "jsdom": "^30.1.1",
     "postcss": "^8.5.25",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
+    "three": "^0.184.0",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.66.0",
     "vite": "^8.0.16",
     "vitest": "^4.1.10"
+  },
+  "bin": {
+    "visionai-workbench": "./bin/cli.mjs"
+  },
+  "files": [
+    "bin",
+    "dist",
+    "CHANGELOG.md",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18"
   }
 }

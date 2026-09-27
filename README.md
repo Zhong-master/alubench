@@ -35,7 +35,25 @@ docker compose up -d --build    # 构建并启动，访问 http://localhost:5173
 
 停止：`docker compose down`。数据（工程文件 + 自动草稿）全部存在**访问者浏览器**里，容器无状态，重建/升级/换机器都不丢。
 
-### 没有 Docker？两种轻量方式
+### 最轻量：npm 包（需 Node.js ≥ 18）
+
+包内自带**已构建好的静态产物**，安装即可用 —— 不需要 Docker，也不需要本机构建工具链，
+**零运行时依赖**（tarball 约 755 KB，解包 2.9 MB）：
+
+```bash
+npx visionai-3dworkbench                                  # 不安装，直接起服务（默认 http://localhost:5173）
+npx visionai-3dworkbench --port 8080 --host 0.0.0.0       # 换端口 / 供内网同事访问
+npx visionai-3dworkbench --help                           # 全部选项
+
+npm i -g visionai-3dworkbench && visionai-workbench --open   # 或全局安装长期使用
+```
+
+内建的静态服务器行为与仓库里的 `nginx.conf` 一致（SPA 回退、`.webmanifest` MIME、
+`/assets/` 永久缓存、`/sw.js` 不缓存、gzip），所以本地看到的和部署上线的表现相同。
+⚠️ PWA「装到桌面/手机主屏」需要安全上下文：`localhost` 可以，用 `--host 0.0.0.0`
+后从局域网 IP 访问则不行（需要 HTTPS）。
+
+### 没有 Docker？另外两种方式
 
 ```bash
 # 1) 开发模式（改代码即时热更新）
@@ -81,6 +99,18 @@ docker compose up -d --build   # 改动后重建并重启
 - **数据持久化在浏览器端**：工程文件下载/导入与 localStorage 草稿均存于客户端，容器无状态，重建/升级不丢数据
 - **健康检查**：容器内置 `HEALTHCHECK`，`docker compose ps` 显示 `healthy` 即正常
 - 构建产物（`dist/`）与 `node_modules` 已通过 `.dockerignore` 排除，不进构建上下文
+
+## 发布 npm 包（维护者）
+
+```bash
+npm pack            # 打 tarball 本地验证（会自动 npm run build，产出约 755 KB）
+npm publish         # 发版（会自动跑完整质量门 npm run check）
+```
+
+`package.json` 关键约定：`bin.visionai-workbench → bin/cli.mjs`（零依赖静态服务器）、
+`files` 只含 `bin/ dist/ README LICENSE CHANGELOG`（**不含源码**）、
+**react/three/semi 等全部在 `devDependencies`**（它们只在构建期用，dist 已把依赖打进产物；
+若放回 `dependencies`，`npx` 会连带安装 100+ 个包）。
 
 ## 常用命令
 
