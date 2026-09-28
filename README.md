@@ -12,6 +12,8 @@
 [![License: CC BY-NC-SA 4.0](https://img.shields.io/badge/license-CC%20BY--NC--SA%204.0-lightgrey.svg)](LICENSE)
 [![Node](https://img.shields.io/badge/node-%E2%89%A518-informational.svg)](#快速开始)
 
+**▶ [在线试用](https://zhong-master.github.io/alubench/)** —— 不用安装、不用注册，打开就能画（工程数据只存在你自己的浏览器里，不会上传）
+
 <img src="docs/images/hero.png" alt="AluBench 主界面：左侧参数面板、中间 3D 铝型材工作台、底栏层参数表" width="100%">
 
 </div>
@@ -53,6 +55,10 @@ AluBench 是一个**纯前端的 3D 铝型材工作台设计器**：选好型材
 <img src="docs/images/mobile.png" width="32%" alt="手机端 390×844 布局">
 
 ## 快速开始
+
+### 方式零：在线试用（零安装）
+
+打开 **<https://zhong-master.github.io/alubench/>** 即可。页面本身托管在 GitHub Pages，**工程数据仍然只存在你的浏览器里**（没有后端、不上传任何东西）；该地址是 HTTPS，因此也能直接「安装到桌面」离线使用。想把数据握在自己手里，用下面任意一种方式自托管。
 
 ### 方式一：Docker（一条命令）
 

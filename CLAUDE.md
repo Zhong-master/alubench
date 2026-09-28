@@ -94,6 +94,7 @@ src/geometry/
 
 - **Docker**：`Dockerfile` 多阶段（node:22-alpine 构建 → nginx:1.27-alpine 托管 `dist/`），`nginx.conf` 负责 SPA 回退、缓存与 gzip，`.dockerignore` 排除 `node_modules` / `dist`。容器无状态 —— 场景数据都在浏览器端，重建 / 升级不丢数据。`public/*` 的文件权限会带进镜像，Dockerfile 用 `chmod -R a+rX` 兜底。
 - **npm 包**：`bin/cli.mjs` 是零依赖静态服务器，包内自带 `dist/`。① **CLI 行为必须与 `nginx.conf` 一致**（SPA 回退、`/assets/` 缺失 = 404、`.webmanifest` MIME、缓存头、gzip）—— 改一边就要改另一边；② **react / three / semi 等只能放 `devDependencies`**（它们只在构建期用，放回 `dependencies` 会让安装连带拉 100+ 个包）；③ `files` 只含 `bin/ dist/ README LICENSE CHANGELOG`，源码不进包；`prepack` 刷新 `dist`、`prepublishOnly` 跑 `npm run check`。
+- **GitHub Pages（在线试用）**：`.github/workflows/pages.yml` 用 `BASE_PATH=/alubench/ npm run build` 构建后发布，产物里 `assets/` 走子路径。三条必须守住的线：① **项目站点是子路径**，任何写死根路径的引用都会白屏 —— `index.html` 的 PWA 链接、`manifest.webmanifest` 的 `start_url` / `scope` / 图标一律用相对路径，`main.tsx` 注册 SW 用 `import.meta.env.BASE_URL`，`sw.js` 的缓存键全部由 `self.registration.scope` 推导（这样根路径与子路径同时成立）；② **SW 预缓存必须覆盖构建产物**：只解析 index.html 会漏掉动态导入的 `exportHtml` 分块，故开启 `build.manifest`（输出到非隐藏的 `asset-manifest.json`，避免 nginx 的点文件规则拒发）并在安装时按清单补全；③ **首次访问时 SW 尚未接管**，产物只能靠安装期预缓存 —— 否则"只打开过一次就断网"会白屏（已实测：修复前 #root 为空、修复后正常挂载）。
 
 ## 硬性约定
 

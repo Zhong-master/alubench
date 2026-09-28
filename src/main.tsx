@@ -35,7 +35,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
 // ⚠️ 只在 http(s) 下注册（Service Worker 在 file:// 与部分内嵌 webview 中不可用，静默跳过即可）。
 if (import.meta.env.PROD && 'serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js').catch(() => {
+    navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`).catch(() => {
       /* 注册失败不影响应用本身（离线能力降级，其余功能照常） */
     });
   });

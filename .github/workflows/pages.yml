@@ -1,0 +1,67 @@
+name: Deploy to GitHub Pages
+
+# 纯前端项目：把 dist/ 发到 GitHub Pages，给一个零安装的在线试用入口。
+# 项目站点地址是子路径（https://<user>.github.io/alubench/），因此必须用 BASE_PATH 构建，
+# 否则 index.html 里的 /assets/... 会打到站点根而整页白屏。
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'public/**'
+      - 'index.html'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'vite.config.ts'
+      - 'tsconfig*.json'
+      - '.github/workflows/pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# 同一时刻只允许一个部署；新推送取消排队中的旧部署（进行中的部署不取消，避免半成品）
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: 构建站点
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      # 部署前先过质量门（lint + tsc + 单测 + 根路径构建），坏代码不上线
+      - run: npm run check
+      - name: 以 Pages 子路径重新构建
+        run: BASE_PATH=/alubench/ npm run build
+      - name: 校验产物确实指向子路径（防止基路径配错导致白屏）
+        run: |
+          set -eu
+          index=dist/index.html
+          grep -q '/alubench/assets/' "$index" || { echo "::error::index.html 未指向 /alubench/assets/，基路径配置有误"; exit 1; }
+          grep -q 'href="manifest.webmanifest"' "$index" || { echo "::error::manifest 链接不是相对路径"; exit 1; }
+          test -f dist/sw.js && test -f dist/manifest.webmanifest
+          echo "产物检查通过：$(grep -o '/alubench/assets/[^"]*' "$index" | head -2 | tr '\n' ' ')"
+      - uses: actions/configure-pages@v6
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: dist
+
+  deploy:
+    name: 部署到 Pages
+    needs: build
+    runs-on: ubuntu-24.04
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5

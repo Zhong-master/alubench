@@ -4,8 +4,8 @@
   "description": "工业铝型材机架 3D 场景编辑器：多层隔板/台面结构设计、物品放置、BOM 切割清单与采购清单导出，支持离线使用。",
   "lang": "zh-CN",
   "dir": "ltr",
-  "start_url": "/",
-  "scope": "/",
+  "start_url": "./",
+  "scope": "./",
   "display": "standalone",
   "orientation": "any",
   "background_color": "#111111",
@@ -13,19 +13,19 @@
   "categories": ["productivity", "utilities", "graphics"],
   "icons": [
     {
-      "src": "/icons/icon-192.png",
+      "src": "icons/icon-192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/icons/icon-512.png",
+      "src": "icons/icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/icons/icon-512-maskable.png",
+      "src": "icons/icon-512-maskable.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
@@ -35,7 +35,7 @@
     {
       "name": "导出 BOM 切割清单",
       "short_name": "BOM",
-      "url": "/?action=bom"
+      "url": "./?action=bom"
     }
   ]
 }
