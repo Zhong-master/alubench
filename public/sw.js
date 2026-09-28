@@ -1,5 +1,5 @@
 /*
- * VisionAI 3D Workbench — Service Worker（手写，无第三方依赖，保持"轻"）
+ * AluBench — Service Worker（手写，无第三方依赖，保持"轻"）
  *
  * 目标：安装到桌面后**离线可用**（工业现场/内网常常没有外网）。
  * 策略（三条，按请求类型分流）：
@@ -12,7 +12,7 @@
  *    `activate` 里会清掉旧版本缓存。只有当"缓存策略本身"改了才需要动 `CACHE_VERSION`。
  */
 const CACHE_VERSION = 'v2';
-const CACHE_NAME = `visionai-workbench-${CACHE_VERSION}`;
+const CACHE_NAME = `alubench-${CACHE_VERSION}`;
 
 /** 安装阶段预缓存应用外壳（保证首次离线访问也能打开） */
 const PRECACHE_URLS = [

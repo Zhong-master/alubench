@@ -13,7 +13,7 @@
 
 export const zh = {
   // ── 应用 / 顶栏 ──
-  'app.title': 'VisionAI 3D Workbench',
+  'app.title': 'AluBench',
   'app.subtitle': '铝型材工作台设计',
   'nav.sceneEdit': '场景编辑',
   'nav.assets': '资产管理',
@@ -218,8 +218,8 @@ export const zh = {
   'csv.header': '类别,规格,长度(mm),数量,合计(mm),采购关键词',
   'bom.typeProfile': '型材',
   'bom.typeBoard': '板材',
-  'doc.reportTitle': 'VisionAI 3D Workbench - 切割清单',
-  'doc.reportH1': 'VisionAI 3D Workbench — 切割清单',
+  'doc.reportTitle': 'AluBench - 切割清单',
+  'doc.reportH1': 'AluBench — 切割清单',
   'doc.reportGenerated': '生成时间：{time}',
   'doc.reportDims': '整体尺寸：',
   'doc.reportProfile': '主型材：',
@@ -264,7 +264,7 @@ export type MessageKey = keyof typeof zh;
  * 多写未知键同样编译不过 —— 改了 `zh` 记得同步 `en`。
  */
 export const en: Record<MessageKey, string> = {
-  'app.title': 'VisionAI 3D Workbench',
+  'app.title': 'AluBench',
   'app.subtitle': 'Aluminium Profile Workbench Designer',
   'nav.sceneEdit': 'Canvas',
   'nav.assets': 'Assets',
@@ -405,9 +405,9 @@ export const en: Record<MessageKey, string> = {
   'tip.deleteLayer': 'Delete layer (Ctrl+Z to undo)',
   'empty.noLayers': 'No layers yet',
   'placeholder.standard': 'Series',
-  'option.gb': 'Chinese (GB)',
-  'option.eu': 'European (EU)',
-  'option.jis': 'Japanese (JIS)',
+  'option.gb': 'GB (China)',
+  'option.eu': 'EU (Europe)',
+  'option.jis': 'JIS (Japan)',
   'placeholder.spec': 'Size',
   'field.customPrefix': 'Custom',
   'placeholder.customSpec': 'Enter a custom profile',
@@ -448,7 +448,7 @@ export const en: Record<MessageKey, string> = {
   'tip.fullscreen': 'Full screen',
   'tip.background': 'Background colour',
   'tip.markerToggle': 'Labels',
-  'marker.short': 'L',
+  'marker.short': 'DIM',
   'marker.dims': 'Dimensions',
   'marker.layerIds': 'Layer IDs',
   'tip.pinnedHide': 'Click to auto-hide',
@@ -459,8 +459,8 @@ export const en: Record<MessageKey, string> = {
   'csv.header': 'Type,Profile,Length (mm),Qty,Total (mm),Search keyword',
   'bom.typeProfile': 'Profile',
   'bom.typeBoard': 'Panel',
-  'doc.reportTitle': 'VisionAI 3D Workbench - Cut list',
-  'doc.reportH1': 'VisionAI 3D Workbench — Cut list',
+  'doc.reportTitle': 'AluBench - Cut list',
+  'doc.reportH1': 'AluBench — Cut list',
   'doc.reportGenerated': 'Generated: {time}',
   'doc.reportDims': 'Overall size: ',
   'doc.reportProfile': 'Main profile: ',

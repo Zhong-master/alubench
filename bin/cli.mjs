@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /**
- * VisionAI 3D Workbench — 零依赖本地/内网静态服务器
+ * AluBench — 零依赖本地/内网静态服务器
  *
- * 用途：`npx visionai-3dworkbench`（或全局安装后 `visionai-workbench`）一条命令
+ * 用途：`npx alubench`（或全局安装后 `alubench`）一条命令
  * 把包内已构建好的 dist/ 起来，不需要 Docker、不需要 Node 构建工具链。
  *
  * 行为刻意对齐仓库里的 nginx.conf（同一套路由回退 / MIME / 缓存头 / gzip），
@@ -47,10 +47,10 @@ const MIME = {
 /** 值得 gzip 的类型（与 nginx 的 gzip_types 对齐） */
 const GZIP_EXT = new Set(['.html', '.js', '.mjs', '.css', '.json', '.webmanifest', '.svg', '.map', '.txt']);
 
-const HELP = `VisionAI 3D Workbench — 铝型材工作台 3D 设计器（纯前端，离线可用）
+const HELP = `AluBench — 铝型材工作台 3D 设计器（纯前端，离线可用）
 
 用法
-  visionai-workbench [选项]            # 全局安装后
+  alubench [选项]            # 全局安装后
   npx ${PKG.name} [选项]               # 不安装直接跑
 
 选项
@@ -80,7 +80,7 @@ function parseArgs(argv) {
     else if (a.startsWith('--port=')) opts.port = Number(a.slice(7));
     else if (a === '-H' || a === '--host') opts.host = String(next());
     else if (a.startsWith('--host=')) opts.host = a.slice(7) || '0.0.0.0';
-    else if (/^\d+$/.test(a)) opts.port = Number(a); // 允许 `visionai-workbench 8080`
+    else if (/^\d+$/.test(a)) opts.port = Number(a); // 允许 `alubench 8080`
     else {
       console.error(`未知参数：${a}\n用 --help 查看用法。`);
       process.exit(2);
@@ -195,7 +195,7 @@ const server = createServer((req, res) => {
 
 server.on('error', (err) => {
   if (err && err.code === 'EADDRINUSE') {
-    console.error(`端口 ${opts.port} 已被占用，换个端口：visionai-workbench --port ${opts.port + 1}`);
+    console.error(`端口 ${opts.port} 已被占用，换个端口：alubench --port ${opts.port + 1}`);
   } else {
     console.error('启动失败：', err && err.message ? err.message : err);
   }
@@ -204,7 +204,7 @@ server.on('error', (err) => {
 
 server.listen(opts.port, opts.host, () => {
   const shown = opts.host === '0.0.0.0' || opts.host === '::' ? 'localhost' : opts.host;
-  console.log(`\n  VisionAI 3D Workbench v${PKG.version}`);
+  console.log(`\n  AluBench v${PKG.version}`);
   console.log(`  ➜  本地访问:  http://${shown}:${opts.port}`);
   if (opts.host === '0.0.0.0' || opts.host === '::') {
     const nets = Object.values(networkInterfaces())

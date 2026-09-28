@@ -70,7 +70,7 @@ function resetHeightBaseline(height: number) {
 
 // 撤销历史上限与自动草稿 key
 const MAX_HISTORY = 60;
-const SAVE_KEY = 'visionai-workbench-draft-v1';
+const SAVE_KEY = 'alubench-draft-v1';
 
 const Logo: React.FC = () => (
   <svg width="28" height="28" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -441,7 +441,7 @@ const App: React.FC = () => {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = '3d-workbench-export.html';
+      a.download = 'alubench-export.html';
       a.click();
       URL.revokeObjectURL(url);
       // 成功也给回执：部分浏览器/内嵌 webview 会静默拦截下载，用户无从判断是否导出成功
@@ -712,7 +712,7 @@ const App: React.FC = () => {
           {!isNarrow && (
             <span style={{ color: 'var(--semi-color-text-2)' }}>
               <span style={{ marginRight: '24px', color: 'var(--semi-color-text-0)', fontWeight: '600' }}>
-                VisionAI 3D Workbench
+                AluBench
               </span>
               {/* 这两个原来是纯装饰文字（点了没反应）—— 接成真实快捷入口：
                   「场景编辑」= 收起两侧栏进入全画布编辑；「资产管理」= 打开右侧物品库 */}

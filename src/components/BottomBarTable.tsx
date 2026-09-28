@@ -2,11 +2,13 @@ import { useMemo } from 'react';
 import { Button, Table, Tooltip } from '@douyinfe/semi-ui';
 import type { ColumnProps, Data } from '@douyinfe/semi-ui/lib/es/table/interface';
 import { IconHandle, IconChevronUp, IconChevronDown } from '@douyinfe/semi-icons';
-import { useT } from '../i18n';
+import { useT, useI18n } from '../i18n';
+import type { Locale } from '../i18n';
 import { localizeLayerLabel } from '../i18n/labels';
 import type { MessageKey } from '../i18n/messages';
 import type { Layer } from './LeftPanel';
 import { ITEM_MAP } from './items';
+import { itemName } from './items/types';
 
 interface BottomBarProps {
   layers: Layer[];
@@ -20,7 +22,7 @@ interface BottomBarProps {
   onMoveLayer?: (id: string, dir: -1 | 1) => void;
 }
 
-const COLUMNS = (layers: Layer[], t: (k: MessageKey) => string) => [
+const COLUMNS = (layers: Layer[], t: (k: MessageKey) => string, locale: Locale) => [
   {
     title: '',
     dataIndex: 'drag',
@@ -96,7 +98,8 @@ const COLUMNS = (layers: Layer[], t: (k: MessageKey) => string) => [
       const counts = new Map<string, number>();
       for (const pi of items) {
         const info = ITEM_MAP.get(pi.itemType);
-        const name = info?.name || pi.itemType;
+        // 显示层翻译：英文界面显示 nameEn，数据本身仍与语言无关
+        const name = info ? itemName(info, locale) : pi.itemType;
         counts.set(name, (counts.get(name) || 0) + 1);
       }
       const text = Array.from(counts.entries())
@@ -113,8 +116,9 @@ const COLUMNS = (layers: Layer[], t: (k: MessageKey) => string) => [
 
 const BottomBarTable: React.FC<BottomBarProps> = ({ layers, selectedId, onSelect, onDragStart, onDragOver, onDragEnd, compact, onMoveLayer }) => {
   const t = useT();
+  const { locale } = useI18n();
   const columns = useMemo(() => {
-    const base = COLUMNS(layers, t);
+    const base = COLUMNS(layers, t, locale);
     if (!compact || !onMoveLayer) return base;
     // 触摸端 ⠿ 拖拽把手无效（HTML5 拖拽不派发事件），直接用它占的首列换成上移/下移——
     // 若把排序列追加到末尾会落到横向滚动区之外（实测 390px 视口下按钮在 x=651，够不到）
@@ -139,7 +143,8 @@ const BottomBarTable: React.FC<BottomBarProps> = ({ layers, selectedId, onSelect
       },
       ...rest,
     ] as unknown as ColumnProps<Data>[];
-  }, [layers, compact, onMoveLayer, t]);
+    // locale 必须进依赖：列里渲染物品名（itemName(info, locale)），切语言要重建列
+  }, [layers, compact, onMoveLayer, t, locale]);
 
   const dataSource = useMemo(
     () => layers.map((layer) => ({ ...layer, key: layer.id })),

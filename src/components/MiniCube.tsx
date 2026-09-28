@@ -1,6 +1,6 @@
 import React, { useCallback, useState } from 'react';
 import { Button, Tooltip } from '@douyinfe/semi-ui';
-import { IconEyeOpened, IconMaximize } from '@douyinfe/semi-icons';
+import { IconEyeOpened, IconMaximize, IconColorPalette } from '@douyinfe/semi-icons';
 import { useT } from '../i18n';
 import type { MessageKey } from '../i18n/messages';
 
@@ -103,10 +103,9 @@ const PresetViewButtons: React.FC = () => {
             theme="solid"
             type="primary"
             onClick={() => setShowColors(!showColors)}
-            style={{ ...btnStyle, fontFamily: 'serif', fontWeight: 700, fontSize: 14, position: 'relative' }}
-          >
-            ◐
-          </Button>
+            icon={<IconColorPalette size="small" />}
+            style={{ ...btnStyle, position: 'relative' }}
+          />
         </Tooltip>
         {/* 颜色选择下拉 */}
         {showColors && (

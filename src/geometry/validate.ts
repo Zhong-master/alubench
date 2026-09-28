@@ -93,7 +93,7 @@ export function validateGeometry(state: AppState, geo: SceneGeometry, locale: Lo
       const cellZ0 = board.pos[2] - board.size[2] / 2 + p.row * ch;
       const cellZ1 = cellZ0 + ch;
       if (xMin < cellX0 - 0.001 || xMax > cellX1 + 0.001 || zMin < cellZ0 - 0.001 || zMax > cellZ1 + 0.001) {
-        const name = ITEM_MAP.get(p.itemType)?.name || p.itemType;
+        const name = itemNameByName(ITEM_MAP.get(p.itemType)?.name || p.itemType, locale);
         issues.push({
           severity: 'warning',
           code: 'item-overflow',
@@ -122,7 +122,7 @@ export function validateGeometry(state: AppState, geo: SceneGeometry, locale: Lo
       const itemTop = (p.y + p.worldSize[2] / 2) * 1000;
       const over = itemTop - ceilingY;
       if (over > CLEARANCE_TOLERANCE && (!worst || over > worst.over)) {
-        worst = { name: ITEM_MAP.get(p.itemType)?.name || p.itemType, over };
+        worst = { name: itemNameByName(ITEM_MAP.get(p.itemType)?.name || p.itemType, locale), over };
       }
     }
     if (worst) {

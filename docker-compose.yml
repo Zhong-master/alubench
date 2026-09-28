@@ -1,8 +1,8 @@
 services:
   workbench:
     build: .
-    image: visionai-3d-workbench:latest
-    container_name: visionai-3d-workbench
+    image: alubench:latest
+    container_name: alubench
     ports:
       # 宿主机 5173（与 dev 端口一致）→ 容器 80；如需换端口改左侧即可
       - "5173:80"

@@ -12,7 +12,7 @@ import { DICTS, type MessageKey } from './messages';
 
 export type Locale = 'zh' | 'en';
 export const LOCALES: Locale[] = ['zh', 'en'];
-export const LOCALE_STORAGE_KEY = 'visionai-workbench-locale';
+export const LOCALE_STORAGE_KEY = 'alubench-locale';
 
 /** 占位符插值：`{n}` / `{name}` → 传入值 */
 export function interpolate(template: string, vars?: Record<string, string | number>): string {

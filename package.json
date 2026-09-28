@@ -1,5 +1,5 @@
 {
-  "name": "visionai-3dworkbench",
+  "name": "alubench",
   "version": "1.0.0",
   "description": "铝型材工业工作台 3D 设计器（纯前端、离线可用）：搭骨架、放设备、导出 BOM 与采购清单 / Industrial aluminium-profile workbench 3D designer: frame builder, equipment placement, BOM export, offline-capable",
   "type": "module",
@@ -28,6 +28,14 @@
     "pwa"
   ],
   "author": "Zhong-master <damowangazhong@gmail.com>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Zhong-master/alubench.git"
+  },
+  "homepage": "https://github.com/Zhong-master/alubench#readme",
+  "bugs": {
+    "url": "https://github.com/Zhong-master/alubench/issues"
+  },
   "license": "CC-BY-NC-SA-4.0",
   "devDependencies": {
     "@douyinfe/semi-icons": "^2.99.3",
@@ -55,7 +63,7 @@
     "vitest": "^4.1.10"
   },
   "bin": {
-    "visionai-workbench": "./bin/cli.mjs"
+    "alubench": "./bin/cli.mjs"
   },
   "files": [
     "bin",
