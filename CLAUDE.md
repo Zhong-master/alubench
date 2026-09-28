@@ -32,14 +32,14 @@ docker compose up -d   # 部署到本机 :5173
 
 **验证三端/手势的方法**：CDP `Emulation.setDeviceMetricsOverride` 切视口、`Emulation.setTouchEmulationEnabled` + `Input.dispatchTouchEvent` 模拟手势。判断"手势是否真的生效"用 `Page.captureScreenshot` 的哈希对比，但**必须先测两帧无输入基线是否一致**（R3F 默认相机不挂进 scene，`scene.traverse(o=>o.isCamera)` 取不到，别指望读相机矩阵）。
 
-**开源协议**：CC BY-NC-SA 4.0（`LICENSE` 为官方原文 + 中文说明），`package.json` 的 `license` 字段为 `CC-BY-NC-SA-4.0`。CC 系列非软件专用协议（无专利授权），商用需另行授权。
+**开源协议**：CC BY-NC-SA 4.0（`LICENSE` 为官方原文 + 中文说明），版权主体 **Zhong-master <damowangazhong@gmail.com>**（花名 + 邮箱，`package.json` 的 `author` 与此保持一致），`license` 字段为 `CC-BY-NC-SA-4.0`。CC 系列非软件专用协议（无专利授权），商用需另行授权 —— 将来若真要签商业授权合同，合同相对方需要真实身份，届时补真名/公司名。
 
 **PWA（可安装 / 离线）**：`public/manifest.webmanifest` + `public/sw.js`（手写，无依赖）+ `public/icons/`（脚本生成）。约定：① **只有生产构建注册 SW**（`main.tsx` 里 `import.meta.env.PROD`）—— dev 下 SW 会缓存模块请求导致改代码不生效；② 策略改动必须**同时升 `CACHE_VERSION`**（`activate` 靠它清旧缓存）；③ 运行时缓存**只对 `/icons/` 写入**，否则缺失路径回退的 index.html 会被缓存到不存在的 URL 下；④ nginx 必须给 `/sw.js` 与清单 `no-cache`（否则装了桌面的用户收不到更新），且清单必须显式 `default_type application/manifest+json`（nginx 不认 `.webmanifest`，默认 `application/octet-stream` 会让 Chrome 拒绝解析清单）；⑤ **SW 需要安全上下文**：`localhost` 或 HTTPS，纯 HTTP + 局域网 IP 不会注册（README 已写明）。
 **⚠️ 验证"真离线"不能靠 CDP 的 `Network.emulateNetworkConditions(offline)`** —— 它只作用于页面自身的网络栈，**Service Worker 内部的 fetch 不受影响**（实测：模拟离线时跨域请求失败，但同源经 SW 的请求仍 200）。正确做法是**把服务器停掉**（`docker compose stop` 后 `curl` 连不上）再导航。
 **⚠️ 静态文件权限会带进镜像**：Vite 把 `public/*` 按原权限复制进 `dist/`。若文件是 0600（某些工具创建的文件就是），nginx worker 读不到 → 该资源 403（本机实测 `sw.js`/清单 403，PWA 全废）。`Dockerfile` 已有 `RUN chmod -R a+rX` 兜底，新增 public 文件后仍建议 `ls -l` 看一眼。
 **部署验证（已实测，别再只读文档）**：`docker compose config` → `docker compose build` → `docker compose up -d` → `docker compose ps` 应为 `healthy`（容器内有 HEALTHCHECK）；随后**务必用浏览器加载容器地址验证生产构建产物**（dev server 与生产构建不同：导出模块是独立 655 KB 按需 chunk，首屏包也只有生产构建才走真实分包）。镜像约 77 MB，`docker compose down` 后镜像保留。
 
-**npm 分发（`bin/cli.mjs`）**：包内自带 `dist/`，`npx visionai-3dworkbench` 即可起服务，使用者不需要 Node 构建工具链。三条必须守住的约定：① **CLI 行为必须与 `nginx.conf` 一致**（SPA 回退、`/assets/` 缺失=404、`.webmanifest` MIME、缓存头、gzip）——改一边就要改另一边，否则"本地跑得好、上线不一样"；② **react/three/semi 等只能放 `devDependencies`**，放回 `dependencies` 会让 `npx` 连带装 100+ 个包（实测 147 个 → 1 个）；③ `files` 只含 `bin/ dist/ README LICENSE CHANGELOG`，源码不进包；`prepack` 负责刷新 `dist`、`prepublishOnly` 跑 `npm run check`。发布需维护者自己的 npm 账号，且 `LICENSE` 占位符必须先换成真实姓名（CC BY-NC-SA 4.0，非软件专用协议、限非商用）。
+**npm 分发（`bin/cli.mjs`）**：包内自带 `dist/`，`npx visionai-3dworkbench` 即可起服务，使用者不需要 Node 构建工具链。三条必须守住的约定：① **CLI 行为必须与 `nginx.conf` 一致**（SPA 回退、`/assets/` 缺失=404、`.webmanifest` MIME、缓存头、gzip）——改一边就要改另一边，否则"本地跑得好、上线不一样"；② **react/three/semi 等只能放 `devDependencies`**，放回 `dependencies` 会让 `npx` 连带装 100+ 个包（实测 147 个 → 1 个）；③ `files` 只含 `bin/ dist/ README LICENSE CHANGELOG`，源码不进包；`prepack` 负责刷新 `dist`、`prepublishOnly` 跑 `npm run check`。发布需维护者自己的 npm 账号（版权署名已是 Zhong-master）。
 
 **部署**：纯前端 SPA，无后端。`Dockerfile` 多阶段构建（builder: node:22-alpine 跑 `npm run build` → runner: nginx:1.27-alpine 托管 `dist/`）；`nginx.conf` 做 SPA 回退与缓存/gzip；`.dockerignore` 排除 `node_modules`/`dist`。**场景数据（工程文件/localStorage 草稿）都在浏览器端，容器无状态，重建/升级不丢数据。** 新增部署文件改动只涉及 Dockerfile / docker-compose.yml / nginx.conf / .dockerignore 四个文件，不进入 `src/`。
 

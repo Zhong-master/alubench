@@ -179,7 +179,13 @@ npm publish         # 发版（会自动跑完整质量门 npm run check）
 - ⚠️ 提醒：CC 系列协议为内容/作品设计，**并非软件专用协议**（不含专利授权等条款）。如果你的目标是
   "代码可被商业使用、但要求衍生开源"，更适合 AGPL-3.0；如果目标是"源码可见但禁止商用"，
   PolyForm Noncommercial 1.0.0 或 BUSL-1.1 在软件场景下的条款更完备
-- ⚠️ 发布前请把 [LICENSE](LICENSE) 首行的 `<请替换为你的真实姓名或公司名>` 换成你的真实署名
+- © 2026 **Zhong-master** <damowangazhong@gmail.com> —— 商业授权、合作或其他事宜请联系此邮箱
+
+建议的署名格式（[CC 官方推荐](https://wiki.creativecommons.org/wiki/Recommended_practices_for_attribution)的
+「标题 — 作者 — 来源 — 协议」写法）：
+
+> VisionAI 3D Workbench © 2026 Zhong-master <damowangazhong@gmail.com>，
+> 采用 [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/deed.zh) 许可
 
 ## 三端适配（PC / 平板 / 手机）
 
