@@ -8,6 +8,7 @@
 
 纯前端 · 无后端 · 数据不出本机 · 离线可用 · PC / 平板 / 手机
 
+[![CI](https://github.com/Zhong-master/alubench/actions/workflows/ci.yml/badge.svg)](https://github.com/Zhong-master/alubench/actions/workflows/ci.yml)
 [![License: CC BY-NC-SA 4.0](https://img.shields.io/badge/license-CC%20BY--NC--SA%204.0-lightgrey.svg)](LICENSE)
 [![Node](https://img.shields.io/badge/node-%E2%89%A518-informational.svg)](#快速开始)
 
