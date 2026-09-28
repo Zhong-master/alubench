@@ -1,31 +1,3 @@
-AluBench
-Copyright (c) 2026 Zhong-master <damowangazhong@gmail.com>
-
-本作品采用「知识共享 署名-非商业性使用-相同方式共享 4.0 国际 (CC BY-NC-SA 4.0)」许可协议。
-This work is licensed under the Creative Commons
-Attribution-NonCommercial-ShareAlike 4.0 International License.
-
-  协议摘要（中文，人话版）: https://creativecommons.org/licenses/by-nc-sa/4.0/deed.zh
-  完整法律文本:            https://creativecommons.org/licenses/by-nc-sa/4.0/legalcode
-
-你可以自由地共享（复制、发行）与演绎（修改、再创作）本作品，但必须遵守：
-
-  1. 署名 (BY)        —— 保留版权声明、许可标识，并注明是否做过修改；
-  2. 非商业性使用 (NC) —— 不得将本作品用于商业目的；
-  3. 相同方式共享 (SA) —— 基于本作品的衍生作品必须采用相同的许可协议。
-
-**商业使用需另行取得授权**：如需将本作品（或其衍生作品）用于商业产品、商业服务
-或对外销售，必须事先获得版权所有者的书面许可。商业授权请联系：Zhong-master <damowangazhong@gmail.com>。
-
-免责声明：本软件按「现状」提供，不附带任何明示或默示的担保，包括但不限于对
-适销性、特定用途适用性的担保。因使用本软件产生的任何损失，版权所有者不承担
-责任。**本软件生成的 BOM（物料清单）与采购链接仅供设计参考，下料与下单前请
-务必自行核对尺寸、材质与工艺要求。**
-
-以下为 CC BY-NC-SA 4.0 完整法律文本（法律文本以英文原文为准）：
-
-=======================================================================
-
 Attribution-NonCommercial-ShareAlike 4.0 International
 
 =======================================================================
@@ -464,3 +436,31 @@ public licenses.
 
 Creative Commons may be contacted at creativecommons.org.
 
+=======================================================================
+
+AluBench
+Copyright (c) 2026 Zhong-master <damowangazhong@gmail.com>
+
+本作品采用「知识共享 署名-非商业性使用-相同方式共享 4.0 国际 (CC BY-NC-SA 4.0)」许可协议。
+This work is licensed under the Creative Commons
+Attribution-NonCommercial-ShareAlike 4.0 International License.
+
+  协议摘要（中文，人话版）: https://creativecommons.org/licenses/by-nc-sa/4.0/deed.zh
+  完整法律文本:            https://creativecommons.org/licenses/by-nc-sa/4.0/legalcode
+
+你可以自由地共享（复制、发行）与演绎（修改、再创作）本作品，但必须遵守：
+
+  1. 署名 (BY)        —— 保留版权声明、许可标识，并注明是否做过修改；
+  2. 非商业性使用 (NC) —— 不得将本作品用于商业目的；
+  3. 相同方式共享 (SA) —— 基于本作品的衍生作品必须采用相同的许可协议。
+
+**商业使用需另行取得授权**：如需将本作品（或其衍生作品）用于商业产品、商业服务
+或对外销售，必须事先获得版权所有者的书面许可。商业授权请联系：Zhong-master <damowangazhong@gmail.com>。
+
+免责声明：本软件按「现状」提供，不附带任何明示或默示的担保，包括但不限于对
+适销性、特定用途适用性的担保。因使用本软件产生的任何损失，版权所有者不承担
+责任。**本软件生成的 BOM（物料清单）与采购链接仅供设计参考，下料与下单前请
+务必自行核对尺寸、材质与工艺要求。**
+
+
+（中文摘要仅为方便阅读，法律文本以上方英文原文为准。）
