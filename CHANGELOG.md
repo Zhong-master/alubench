@@ -27,6 +27,8 @@
 - PWA：可安装到桌面或手机主屏，支持离线使用（Service Worker 手写，无第三方依赖）
 - Docker 一键部署：多阶段构建 → nginx 托管，镜像约 77 MB，内置健康检查
 - npm 包：`npx alubench` 一条命令起服务，零运行时依赖（包内自带构建产物）
+- 在线试用：[GitHub Pages](https://zhong-master.github.io/alubench/) 自动发布（push 即部署），零安装体验
+- 构建产物与基路径无关：根路径（Docker / npm 包）与子路径（Pages）同一套源码，PWA 在两种部署下都可用
 - 中英双语：界面、BOM、导出产物、采购文本全覆盖；语言只影响显示，不写入工程数据
 
 ### 工程质量
