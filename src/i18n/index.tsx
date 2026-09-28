@@ -37,8 +37,11 @@ export function translate(locale: Locale, key: MessageKey, vars?: Record<string,
  * （SSR / 老浏览器场景下不要擅自把中文用户切成英文）。
  */
 export function detectLocale(langs?: readonly string[]): Locale {
+  // 显式传入的数组即为准：空数组表示「拿不到任何语言信息」，不再回退到 navigator。
+  // Node ≥21 的 navigator.language 取进程 locale，若空数组也回退，同一个用例会在本机
+  // （LANG=zh_CN）通过、在 CI（LANG=C）失败，且掩盖「无信息」这一真实语义。
   const list =
-    langs && langs.length
+    langs !== undefined
       ? langs
       : typeof navigator === 'undefined'
         ? []

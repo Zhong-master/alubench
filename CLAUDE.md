@@ -132,6 +132,7 @@ src/geometry/
 - **真离线**不能靠 CDP 的 `Network.emulateNetworkConditions(offline)`（它不作用于 Service Worker 内部的 fetch）—— 要把服务器停掉再导航。
 - **部署**：`docker compose build` → `up -d` → `ps` 应为 `healthy`，随后用浏览器加载容器地址验证**生产构建产物**（dev server 与生产构建的分包行为不同）。
 - **三端 / 手势**：CDP `Emulation.setDeviceMetricsOverride` 切视口、`setTouchEmulationEnabled` + `Input.dispatchTouchEvent` 模拟手势；判断手势是否生效用 `Page.captureScreenshot` 的哈希对比，但**先测两帧无输入基线是否一致**。
+- **任何依赖机器 locale 的用例都会"本机过、CI 挂"**：Node ≥21 的 `navigator.language` / `navigator.languages` 取自进程 `LANG`（本机 `zh_CN` → `['zh-CN']`，CI `LANG=C` → `['en-US']`）。涉及语言探测的断言必须**显式传数组**或用 `vi.stubGlobal('navigator', …)`，不要读运行环境。本地复现 CI 行为：`env LANG=C LC_ALL=C npx vitest run`。
 
 ### README 配图（`docs/images/`）
 

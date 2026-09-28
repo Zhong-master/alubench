@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { DICTS, type MessageKey } from '../messages';
 import { detectLocale, interpolate, translate } from '../index';
 import { localizeLayerLabel, localizeProfileSpec, tFor } from '../labels';
@@ -40,6 +40,20 @@ describe('i18n 文案表', () => {
     expect(detectLocale(['de-DE', 'zh-CN'])).toBe('zh'); // 列表里出现中文就用中文
     expect(detectLocale([])).toBe('zh');
     expect(detectLocale([''])).toBe('zh');
+  });
+
+  it('detectLocale：不传参时回退到 navigator（与运行环境 locale 无关）', () => {
+    // 必须 stub：Node ≥21 的 navigator.language 取进程 LANG，直接依赖它会「本机过、CI 挂」
+    try {
+      vi.stubGlobal('navigator', { language: 'zh-CN', languages: ['zh-CN'] });
+      expect(detectLocale()).toBe('zh');
+      vi.stubGlobal('navigator', { language: 'en-US', languages: ['en-US'] });
+      expect(detectLocale()).toBe('en');
+      vi.stubGlobal('navigator', { language: 'en-US', languages: [] }); // languages 为空 → 退到 language
+      expect(detectLocale()).toBe('en');
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });
 
